@@ -1,4 +1,4 @@
 # Ignore everything
-*
 # Except the plugin
-!describe_your_espresso.dsx
+/.buildpath
+/.project

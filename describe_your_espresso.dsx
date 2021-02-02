@@ -36,6 +36,7 @@
 ### 8) Upload shot files to Miha's visualizer or other repositories with a button press.
 ### 9) Configuration page allows defining settings and launch database maintenance actions from within the app. 
 ###
+### Source code available in GitHub: https://github.com/ebengoechea/dye_de1app_dsx_plugin/
 ### This code is released under GPLv3 license. See LICENSE file under the DE1 source folder in github.
 ###
 ### By Enrique Bengoechea <enri.bengoechea@gmail.com> 
