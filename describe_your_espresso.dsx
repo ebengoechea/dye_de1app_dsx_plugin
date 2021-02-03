@@ -3126,7 +3126,7 @@ proc ::DYE::DB::update_shot_equipment { clock other_equipment { insert_only 0 } 
 			set sort_number [expr {(int($i/3)+1)*10}]
 			lappend enames "$equipment$type"
 
-			append sql "($clock,[DB::string2sql $equipment],[DB::string2sql $type],[DB::string2sql $setting],$sort_number),"
+			append sql "($clock,[::DYE::DB::string2sql $equipment],[::DYE::DB::string2sql $type],[::DYE::DB::string2sql $setting],$sort_number),"
 		}
 		set sql [string range $sql 0 [expr {[string length $sql]-2}]]
 		db eval "$sql"
@@ -3134,7 +3134,7 @@ proc ::DYE::DB::update_shot_equipment { clock other_equipment { insert_only 0 } 
 		if { $insert_only != 1 } {
 			set sql "DELETE FROM shot_equipment WHERE clock=$clock AND equipment_name||equipment_type NOT IN (
 				SELECT equipment_name||equipment_type FROM shot_equipment  
-				WHERE equipment_name||equipment_type IN ([DB::strings2sql $enames]))"
+				WHERE equipment_name||equipment_type IN ([::DYE::DB::strings2sql $enames]))"
 			db eval "$sql"
 		}
 	}
@@ -3191,7 +3191,7 @@ proc ::DYE::DB::available_categories { field_name {exc_removed_shots 1} {filter 
 		}
 		
 		if { [llength $args] > 0 && [lindex $args 0] ne "" } {
-			lappend extra_wheres "t.$db_type_column1 IN ([DB::strings2sql [lindex $args 0]])"
+			lappend extra_wheres "t.$db_type_column1 IN ([::DYE::DB::strings2sql [lindex $args 0]])"
 		}
 	}
 	
@@ -3199,7 +3199,7 @@ proc ::DYE::DB::available_categories { field_name {exc_removed_shots 1} {filter 
 		lappend fields "TRIM(t.$db_type_column2) as $db_type_column2" 
 		lappend grouping_fields "TRIM(t.$db_type_column2)"
 		if { [llength $args] > 1 && [lindex $args 1] ne "" } {
-			lappend extra_wheres "t.$db_type_column2 IN ([DB::strings2sql [lindex $args 1]])"
+			lappend extra_wheres "t.$db_type_column2 IN ([::DYE::DB::strings2sql [lindex $args 1]])"
 		}
 	}
 	
@@ -3272,19 +3272,19 @@ proc ::DYE::DB::shots_using_category { field_name value {return_what clock} args
 		} else { 
 			set sql "SELECT [join $return_what ,] "
 		}
-		append sql " FROM V_shot WHERE removed=0 AND $field_name=[DB::string2sql $value] ORDER BY clock DESC"
+		append sql " FROM V_shot WHERE removed=0 AND $field_name=[::DYE::DB::string2sql $value] ORDER BY clock DESC"
 	} else {
 		if { $return_what eq "count" } { 
 			set sql "SELECT COUNT(DISTINCT t.clock) " 
 		} else { 
 			set sql "SELECT DISTINCT [join $return_what ,] " 
 		}
-		append sql "FROM $db_table t INNER JOIN V_shot s ON t.clock=s.clock WHERE t.$field_name=[DB::string2sql $value] "
+		append sql "FROM $db_table t INNER JOIN V_shot s ON t.clock=s.clock WHERE t.$field_name=[::DYE::DB::string2sql $value] "
 		if { $db_type_column1 ne "" && [llength $args] > 0 } {
-			append sql "AND $db_type_column1=[DB::string2sql [lindex $args 0]] " 
+			append sql "AND $db_type_column1=[::DYE::DB::string2sql [lindex $args 0]] " 
 		}
 		if { $db_type_column2 ne "" && [llength $args] > 1 } {
-			append sql "AND $db_type_column2=[DB::string2sql [lindex $args 1]] " 
+			append sql "AND $db_type_column2=[::DYE::DB::string2sql [lindex $args 1]] " 
 		}
 		append sql "ORDER BY t.clock DESC"
 	}
@@ -3312,7 +3312,7 @@ proc ::DYE::DB::update_category { field_name old_value new_value { update_files 
 	set clocks {}
 	set new_value [string trim $new_value]
 	
-	set sql "SELECT clock, filename FROM shot WHERE $field_name=[DB::string2sql $old_value]"
+	set sql "SELECT clock, filename FROM shot WHERE $field_name=[::DYE::DB::string2sql $old_value]"
 	db eval "$sql" {
 		lappend clocks $clock
 		lappend filenames $filename
@@ -3342,7 +3342,7 @@ proc ::DYE::DB::update_category { field_name old_value new_value { update_files 
 	
 		# Update in database
 		if { $::DYE::settings(db_persist_desc) == 1 } {
-			set sql "UPDATE shot SET file_modification_date=COALESCE($mtime,file_modification_date), $field_name=[DB::string2sql $new_value] WHERE clock=[lindex $clocks $i]"
+			set sql "UPDATE shot SET file_modification_date=COALESCE($fmtime,file_modification_date), $field_name=[::DYE::DB::string2sql $new_value] WHERE clock=[lindex $clocks $i]"
 			msg "DYE: $sql"
 			db eval "$sql"
 		}
@@ -3400,25 +3400,25 @@ proc ::DYE::DB::NEW_update_category { field_name old_value new_value { use_speci
 	}
 
 	if { $db_table eq "shot" } {
-		set sql "SELECT s.clock, s.filename FROM shot s WHERE s.removed=0 AND $field_name=[DB::string2sql $old_value] "
-		set sql_count "SELECT COUNT(clock) FROM shot s WHERE s.removed=0 AND $field_name=[DB::string2sql $old_value] "
+		set sql "SELECT s.clock, s.filename FROM shot s WHERE s.removed=0 AND $field_name=[::DYE::DB::string2sql $old_value] "
+		set sql_count "SELECT COUNT(clock) FROM shot s WHERE s.removed=0 AND $field_name=[::DYE::DB::string2sql $old_value] "
 	} else {
 		set sql "SELECT s.clock, s.filename FROM $db_table t INNER JOIN V_shot s ON t.clock=s.clock 
-			WHERE s.removed=0 AND $field_name=[DB::string2sql $old_value] "
+			WHERE s.removed=0 AND $field_name=[::DYE::DB::string2sql $old_value] "
 		set sql_count "SELECT COUNT(DISTINCT s.clock) FROM $db_table t INNER JOIN V_shot s ON t.clock=s.clock 
-			WHERE s.removed=0 AND $field_name=[DB::string2sql $old_value] "			
+			WHERE s.removed=0 AND $field_name=[::DYE::DB::string2sql $old_value] "			
 	}
 	if { $use_specified_files == 1 } {
 		if { [llength $files_to_modify] == 0 } { set update_shots 0 }
-		append sql "AND s.filename IN ([DB::strings2sql $files_to_modify]) "
+		append sql "AND s.filename IN ([::DYE::DB::strings2sql $files_to_modify]) "
 	}
 	if { $db_type_column1 ne "" && [llength $args] > 0 } {
-		append sql "AND $db_type_column1=[DB::string2sql [lindex $args 0]] "
-		append sql_count "AND $db_type_column1=[DB::string2sql [lindex $args 0]] "
+		append sql "AND $db_type_column1=[::DYE::DB::string2sql [lindex $args 0]] "
+		append sql_count "AND $db_type_column1=[::DYE::DB::string2sql [lindex $args 0]] "
 	}
 	if { $db_type_column2 ne "" && [llength $args] > 1 } {
-		append sql "AND $db_type_column2=[DB::string2sql [lindex $args 1]] "
-		append sql_count "AND $db_type_column1=[DB::string2sql [lindex $args 0]] "
+		append sql "AND $db_type_column2=[::DYE::DB::string2sql [lindex $args 1]] "
+		append sql_count "AND $db_type_column1=[::DYE::DB::string2sql [lindex $args 0]] "
 	}
 	append sql "ORDER BY s.clock DESC"	
 
@@ -3457,20 +3457,20 @@ msg "DYE DEBUG NEW_update_category, sql=$sql"
 			if { $::DYE::settings(db_persist_desc) == 1 } {
 				set sql "UPDATE shot SET file_modification_date=COALESCE($fmtime,file_modification_date)"
 				if { $db_table eq "shot" } {
-					append sql ",$field_name=[DB::string2sql $new_value]" 
+					append sql ",$field_name=[::DYE::DB::string2sql $new_value]" 
 				}						
-				append sql " WHERE clock=[lindex $clocks $i] AND $field_name=[DB::string2sql $old_value]"
+				append sql " WHERE clock=[lindex $clocks $i] AND $field_name=[::DYE::DB::string2sql $old_value]"
 				#msg "DYE DB: $sql"
 				db eval "$sql"
 				
 				if { $db_table ne "shot" } {
-					set sql "UPDATE $db_table SET $field_name=[DB::string2sql $new_value] 
-						WHERE clock=[lindex $clocks $i] AND $field_name=[DB::string2sql $old_value] "
+					set sql "UPDATE $db_table SET $field_name=[::DYE::DB::string2sql $new_value] 
+						WHERE clock=[lindex $clocks $i] AND $field_name=[::DYE::DB::string2sql $old_value] "
 					if { $db_type_column1 ne "" && [llength $args] > 0 } {
-						append sql "AND $db_type_column1=[DB::string2sql [lindex $args 0]] " 
+						append sql "AND $db_type_column1=[::DYE::DB::string2sql [lindex $args 0]] " 
 					}
 					if { $db_type_column2 ne "" && [llength $args] > 1 } {
-						append sql "AND $db_type_column2=[DB::string2sql [lindex $args 1]] " 
+						append sql "AND $db_type_column2=[::DYE::DB::string2sql [lindex $args 1]] " 
 					}						
 					# msg "DYE DB: $sql
 					db eval "$sql"
@@ -3490,12 +3490,12 @@ msg "DYE DEBUG: NEW_update_category: n_total_shots_using_category=$n_total_shots
 	if { $lookup_table ne "" && $n_total_shots_using_category == $i} {
 		# Are there still shots using the old value? If there is, do nothing. If there aren't, update the lookup table. 
 	
-		set sql "UPDATE $lookup_table SET $field_name=[DB::string2sql $new_value] WHERE $field_name=[DB::string2sql $old_value] "
+		set sql "UPDATE $lookup_table SET $field_name=[::DYE::DB::string2sql $new_value] WHERE $field_name=[::DYE::DB::string2sql $old_value] "
 		if { $db_type_column1 ne "" && [llength $args] > 0 } {
-			append sql "AND $db_type_column1=[DB::string2sql [lindex $args 0]] "
+			append sql "AND $db_type_column1=[::DYE::DB::string2sql [lindex $args 0]] "
 		}
 		if { $db_type_column2 ne "" && [llength $args] > 1 } {
-			append sql "AND $db_type_column2=[DB::string2sql [lindex $args 1]] "
+			append sql "AND $db_type_column2=[::DYE::DB::string2sql [lindex $args 1]] "
 		}
 
 msg "DYE DEBUG: NEW_update_category: $sql"
@@ -3595,17 +3595,17 @@ proc ::DYE::DB::add_category { field_name new_value {type1 {}} {type2 {}} args }
 	set fields {}
 	set field_values {}
 	lappend fields $field_name
-	lappend field_values [DB::string2sql $new_value]
+	lappend field_values [::DYE::DB::string2sql $new_value]
 	set where_conds {}
 	if { $db_type_column1 ne "" && $type1 ne "" } {
-		lappend where_conds "$db_type_column1=[DB::string2sql $type1]"
+		lappend where_conds "$db_type_column1=[::DYE::DB::string2sql $type1]"
 		lappend fields "$db_type_column1"
-		lappend field_values [DB::string2sql $type1]
+		lappend field_values [::DYE::DB::string2sql $type1]
 	}
 	if { $db_type_column2 ne "" && $type2 ne "" } {
-		lappend where_conds "$db_type_column2=[DB::string2sql $type2]"
+		lappend where_conds "$db_type_column2=[::DYE::DB::string2sql $type2]"
 		lappend fields "$db_type_column2"
-		lappend field_values [DB::string2sql $type2]
+		lappend field_values [::DYE::DB::string2sql $type2]
 	}
 	
 	if { [llength $args] > 0 } {
@@ -3619,7 +3619,7 @@ proc ::DYE::DB::add_category { field_name new_value {type1 {}} {type2 {}} args }
 	lappend fields "sort_number"
 	lappend field_values "(SELECT (COUNT($field_name)+1)*10 FROM $lookup_table)"
 	
-	set check_sql "SELECT $field_name FROM $lookup_table WHERE $field_name=[DB::string2sql $new_value] "
+	set check_sql "SELECT $field_name FROM $lookup_table WHERE $field_name=[::DYE::DB::string2sql $new_value] "
 	if { $where_conds ne "" } { append check_sql " AND [join $where_conds { AND }]" }
 	#msg "DYE DB add_category, check_sql=$check_sql"	
 	if { [db exists "$check_sql"] } { return 0 }
@@ -3642,12 +3642,12 @@ proc ::DYE::DB::remove_category { field_name value {type1 {}} {type2 {}} } {
 		data_type db_type_column1 db_type_column2 lookup_table
 	if { $data_type ne "category" } { return }
 	
-	set sql "DELETE FROM $lookup_table WHERE $field_name=[DB::string2sql $value]"
+	set sql "DELETE FROM $lookup_table WHERE $field_name=[::DYE::DB::string2sql $value]"
 	if { $db_type_column1 ne "" && $type1 ne "" } {
-		append sql " AND $db_type_column1=[DB::string2sql $type1]"
+		append sql " AND $db_type_column1=[::DYE::DB::string2sql $type1]"
 	}
 	if { $db_type_column2 ne "" && $type2 ne "" } {
-		append sql " AND $db_type_column2=[DB::string2sql $type2]"
+		append sql " AND $db_type_column2=[::DYE::DB::string2sql $type2]"
 	}
 
 	db eval "$sql"
@@ -5114,7 +5114,7 @@ proc ::DYE::NUME::load_page { field_name { num_variable {}} args } {
 
 	::DYE::GUI::enable_or_disable_widgets [expr $::DYE::NUME::data(n_decimals)>0] "num_dot*" $ns
 
-	if { $num_variable ne "" } {
+	if { $num_variable ne "" && [subst \$$num_variable] ne "" } {
 		# Without the delay, the value is not selected. Tcl misteries...
 		after 10 ::DYE::NUME::set_value [subst \$$num_variable]
 	}	
@@ -5129,11 +5129,11 @@ proc ::DYE::NUME::setup_ui {} {
 	
 	# Value being edited
 	set x_left_center 550; set y 275
-	::DYE::GUI::add_text_entry $page $data(field_name) -1 -1 $x_left_center $y 6 -font [DSx_font font 16] \
+	::DYE::GUI::add_text_entry $page $data(field_name) -1 -1 $x_left_center $y 5 -font [DSx_font font 16] \
 		-textvariable ::DYE::NUME::data(value) -widget_name value -data_type numeric -exportselection 1
 	
 	# Erase button
-	::DYE::GUI::add_symbol $page $x_left_center [expr {$y+130}] eraser -size medium -has_button 1 \
+	::DYE::GUI::add_symbol $page $x_left_center [expr {$y+140}] eraser -size medium -has_button 1 \
 		-button_cmd { set ::DYE::NUME::data(value) "" }
 	
 	# Increment/Decrement value arrows 
@@ -6572,7 +6572,7 @@ proc ::DYE::MODC::move_category_up {} {
 	set prev_sel [lindex $data(categories) [expr {$sel_idx-1}]]
 	set prev_sel_sort [db eval "SELECT sort_number FROM $lookup_table WHERE $field_name=[::DYE::DB::string2sql $prev_sel]" ]
 	db eval "UPDATE $lookup_table SET sort_number=$current_sel_sort WHERE $field_name=[::DYE::DB::string2sql $prev_sel]; 
-		UPDATE $lookup_table SET sort_number=$prev_sel_sort WHERE $field_name=[DB::string2sql $current_sel];" 
+		UPDATE $lookup_table SET sort_number=$prev_sel_sort WHERE $field_name=[::DYE::DB::string2sql $current_sel];" 
 	
 	fill_categories_listbox 1
 	categories_select
