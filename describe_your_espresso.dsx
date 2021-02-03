@@ -3234,7 +3234,7 @@ proc ::DYE::DB::available_categories { field_name {exc_removed_shots 1} {filter 
 	}
 	
 #set ::DYE::debug_text $sql
-msg "DYE DEBUG available_categories for $field_name, sql=$sql"
+#msg "DYE DEBUG available_categories for $field_name, sql=$sql"
 	if { [llength $fields] == 1 } {
 		return [db eval "$sql"]
 	} else {
@@ -3422,8 +3422,8 @@ proc ::DYE::DB::NEW_update_category { field_name old_value new_value { use_speci
 	}
 	append sql "ORDER BY s.clock DESC"	
 
-msg "DYE DEBUG NEW_update_category, sql_count=$sql_count"
-msg "DYE DEBUG NEW_update_category, sql=$sql"
+#msg "DYE DEBUG NEW_update_category, sql_count=$sql_count"
+#msg "DYE DEBUG NEW_update_category, sql=$sql"
 	set n_total_shots_using_category [db eval "$sql_count"]
 		
 	set i 0
@@ -3483,7 +3483,7 @@ msg "DYE DEBUG NEW_update_category, sql=$sql"
 		if { $i > 0 } update_last_updated
 	}
 	
-msg "DYE DEBUG: NEW_update_category: n_total_shots_using_category=$n_total_shots_using_category, i=$i"	
+#msg "DYE DEBUG: NEW_update_category: n_total_shots_using_category=$n_total_shots_using_category, i=$i"	
 	# Update category db lookup table, if necessary (other_equipment elements). Because the change may have only
 	# affected some shots, we don't know whether we need to update the category (no longer used), so we check
 	# existence first.
@@ -3498,7 +3498,7 @@ msg "DYE DEBUG: NEW_update_category: n_total_shots_using_category=$n_total_shots
 			append sql "AND $db_type_column2=[::DYE::DB::string2sql [lindex $args 1]] "
 		}
 
-msg "DYE DEBUG: NEW_update_category: $sql"
+#msg "DYE DEBUG: NEW_update_category: $sql"
 		db eval "$sql"
 		
 		if { $desc_section eq "equipment" } { ::DYE::DB::update_equipment_categories }
@@ -4671,7 +4671,7 @@ proc ::DYE::DE::upload_to_visualizer_click {} {
 
 proc ::DYE::DE::update_visualizer_button { {check_context 1} } {
 	if { $check_context == 1 && $::de1(current_context) ne "::DYE::DE" } {
-		msg "DYE DEBUG: WRONG context in update_visualizer_button='$::de1(current_context)'"	
+		msg "DYE WARNING: WRONG context in update_visualizer_button='$::de1(current_context)'"	
 		return
 	}
 
@@ -5086,7 +5086,7 @@ proc ::DYE::NUME::load_page { field_name { num_variable {}} args } {
 		set data($fn) [ifexists opts(-$fn) [subst \$f_$fn]] 
 	}
 	if { $f_data_type ne "numeric" } {
-		msg "DYE DEBUG: field '$field_name' is not numeric, cannot launch page ::DYE::NUME"
+		msg "DYE WARNING: field '$field_name' is not numeric, cannot launch page ::DYE::NUME"
 		return
 	}
 
@@ -6633,9 +6633,9 @@ proc DYE::MODC::modify_click {} {
 	say [translate "modifying"] ""
 	borg spinner on
 
-msg "DYE DEBUG: modify_click old_vaue='$old_value', new_value='$new_value'"	
-msg "DYE DEBUG: target_shots='$target_shots'"	
-msg "DYE DEBUG: data(types)='$data(types)'"
+#msg "DYE DEBUG: modify_click old_vaue='$old_value', new_value='$new_value'"	
+#msg "DYE DEBUG: target_shots='$target_shots'"	
+#msg "DYE DEBUG: data(types)='$data(types)'"
 	set modified_shots [::DYE::DB::NEW_update_category $data(category) $old_value $new_value $use_specified_files \
 		$target_shots {*}$data(types)]
 	
