@@ -5112,11 +5112,12 @@ proc ::DYE::NUME::load_page { field_name { num_variable {}} args } {
 	page_to_show_when_off $ns	
 	::DYE::GUI::set_scrollbars_dims $ns "previous_values"
 
-	if { $num_variable ne "" } { 
-		set_value [subst \$$num_variable]
-	}
-
 	::DYE::GUI::enable_or_disable_widgets [expr $::DYE::NUME::data(n_decimals)>0] "num_dot*" $ns
+
+	if { $num_variable ne "" } {
+		# Without the delay, the value is not selected. Tcl misteries...
+		after 10 ::DYE::NUME::set_value [subst \$$num_variable]
+	}	
 }
 
 proc ::DYE::NUME::setup_ui {} {
