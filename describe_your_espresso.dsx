@@ -43,26 +43,29 @@
 ### (with lots of copy/paste/tweak from Damian, John and Johanna's code!)
 ########################################################################################################################
 
-package provide describe_your_espresso.dsx 1.14
+package provide describe_your_espresso.dsx 1.15
 package require sqlite3
 package require http
 package require tls
 package require json
+#package require vfs::zip
+package require zipfs
 
-variable version {1.14}
+variable version {1.15}
 
 ########################################################################################################################
 ### VARIABLES DECLARATIONS 
 
 namespace eval DYE {
-	variable plugin_version {1.14}
+	variable plugin_version {1.15}
+	variable plugin_file "describe_your_espresso.dsx"
 	variable db_version 4
 	variable min_DSx_version {4.39}
 	variable min_de1app_version {1.31}
 	variable settings_path "[skin_directory]/DSx_User_Set/DYE_settings.tdb"
 	variable filename_clock_format "%Y%m%dT%H%M%S"
 	variable friendly_clock_format "%Y/%m/%d %H:%M"
-	variable debug_text {}
+	variable debug_text {}	
 	
 	variable settings
 	array set settings {}
@@ -146,6 +149,9 @@ proc ::DYE::main {} {
 	GUI::setup_aspect
 	foreach ns {DE IS NUME FSH CFG SEQ MODC MENU GUI} { ::DYE::${ns}::setup_ui }	
 	save_settings
+	
+	msg "DYE: plugin_file info_script=[info script], script=[file tail [info script]]"
+	::DYE::update_DSx_plugin_from_github $::DYE::plugin_file ""
 }
  
 # Verify the minimum required versions of DE1 app & DSx skin are used, otherwise prevents startup.
@@ -190,7 +196,8 @@ proc ::DYE::check_settings {} {
 	ifexists settings(use_stars_to_rate_enjoyment) 1
 	ifexists settings(next_shot_DSx_home_coords) {500 1150}
 	ifexists settings(last_shot_DSx_home_coords) {2120 1150}
- 
+	ifexists settings(github_latest_url) https://api.github.com/repos/ebengoechea/dye_de1app_dsx_plugin/releases/latest
+	
 	# Propagation mechanism 
 	ifexists settings(next_modified) 0
 	foreach field_name "$::DYE::propagated_fields espresso_notes" {
@@ -834,6 +841,146 @@ proc ::DYE::visualizer_upload {content} {
 	set ::DYE::settings(last_visualizer_result) "[translate {Upload successful}]"
 	http::cleanup $token
 	return $uploaded_id
+}
+
+# Queries GitHub repository for the latest released version and returns a 3-elements list 
+# { <tag (version number)> <release_url> <release_description> }
+proc ::DYE::github_latest_release { { url {}} } {
+	if { $url eq "" } {
+		set url $::DYE::settings(github_latest_url)
+		if { $url eq "" } return
+	}
+	
+	::http::register https 443 ::tls::socket
+	
+	if {[catch {
+		set token [::http::geturl $url -timeout 10000]
+		set status [::http::status $token]
+		set answer [::http::data $token]
+		set ncode [::http::ncode $token]
+		set code [::http::code $token]
+		::http::cleanup $token
+	} err] != 0} {
+		msg "DYE: Could not get latest release from GitHub! $err"
+		say [translate "Download failed"] ""
+		catch { ::http::cleanup $token }
+		return
+	}
+	
+	if { $status eq "ok" && $ncode == 200 } {
+		if {[catch {
+			set response [::json::json2dict $answer]
+			set release_url [dict get $response zipball_url]
+			set release_desc [dict get $response body]
+			set release_version [dict get $response tag_name]
+		} err] != 0} {
+			msg "DYE: Unexpected GitHub server answer $answer"
+			say [translate "Download failed"] ""
+			return			
+		}
+		
+		regsub "^v(.+)$" $release_version "\\1" release_version
+		return [list $release_version $release_url $release_desc]
+	} else {
+		msg "DYE: Could not get latest release from GitHub! $code"
+		say [translate "Download failed"] ""
+	}
+}
+
+# Downloads a release ZIP file from GitHub (default to latest), extracts $plugin_file from it and copies it to the 
+# DSx plugin folders, replacing the current plugin file if it exists. Returns 1 if successful, 0 otherwise.
+proc ::DYE::update_DSx_plugin_from_github { plugin_file { release_url {}} } {
+	if { $release_url eq "" } {
+		set release [::DYE::github_latest_release]
+		if { [llength $release] == 3 } { 
+			set release_url [lindex $release 1]
+		} else {
+			return 0
+		}
+	}
+
+	::http::register https 443 ::tls::socket
+	
+	if {[catch {
+		set token [::http::geturl $release_url -timeout 30000]
+		set status [::http::status $token]
+		set meta [::http::meta $token]
+		set ncode [::http::ncode $token]
+		set code [::http::code $token]
+		::http::cleanup $token
+	} err] != 0} {
+		msg "DYE: Could not get latest release ZIP answer from GitHub! $err"
+		say [translate "Download failed"] ""
+		catch { ::http::cleanup $token }
+		return 0
+	}
+	
+	set zip_url {}
+	if { $status eq "ok" && $ncode == 302} {
+		if {[catch {
+			set zip_url [dict get $meta Location]
+		} err] != 0} {
+			msg "DYE: Unexpected meta format from GitHub! $err"
+			say [translate "Download failed"] ""
+			return 0
+		}			
+	} else {
+		msg "DYE: Could not get latest release from GitHub! $code"
+		say [translate "Download failed"] ""
+		return 0	
+	}
+	
+	set zip_path "[skin_directory]/DSx_User_Set/latest_plugin.zip"
+	set zip_fn [file tail $zip_path]
+	if { [file exists $zip_path] } { 
+		file delete $zip_path
+	}
+	
+	::decent_http_get_to_file $zip_url $zip_path
+	
+	if { [file exists $zip_path] } {
+		if {[catch {
+			cd "[skin_directory]/DSx_User_Set"
+			set mnt_point [zipfs::mount $zip_path __zip]
+		} err] != 0} {
+			msg "DYE: Could not get uncompress ZIP or unexpected ZIP contents: $err"
+			say [translate "Download failed"] ""
+			catch { zipfs::unmount $zip_path }
+			catch { file delete $zip_path } 
+			return 0
+		}
+		
+		cd __zip
+		set dir_name [glob *]
+		
+		if { [llength $dir_name] == 1 && [file isdirectory $dir_name] } {
+			cd $dir_name
+								
+			if { [zipfs exists $plugin_file] } {
+				file copy -force $plugin_file "[skin_directory]/DSx_Plugins/${plugin_file}_TEST" 
+			} else {
+				msg "DYE: Could not find plugin file inside ZIP: $err"
+				say [translate "Download failed"] ""
+				catch { zipfs unmount $zip_path }
+				catch { file delete $zip_path }
+				return 0
+			}
+		} else {
+			msg "DYE: Donwloaded ZIP does not have the expected structure: $err"
+			say [translate "Download failed"] ""
+			catch { zipfs unmount $zip_path }
+			catch { file delete $zip_path }
+			return 0
+		}
+
+		catch { zipfs unmount $zip_path }
+		catch { file delete $zip_path }		
+		return 1
+	} else {
+		msg "DYE: Could not download ZIP file"
+		say [translate "Download failed"] ""
+		return 0
+	}
 }
 
 ### DYE GRAPHICAL USER INTERFACE PROCEDURES ###########################################################################

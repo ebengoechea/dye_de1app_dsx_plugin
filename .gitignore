@@ -2,3 +2,4 @@
 .project
 .buildpath
 .settings
+test*.tcl
