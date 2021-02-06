@@ -7,7 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New page "Other equipment". New user-defined field "other_equipement". New DB tables "shot_equipment", "equipment" & "equipment_type".
 - New page "Modify category", which shows exactly which shots will be modified and allows the user to backup modified files and modify only a subset of files. Also shows progress information.
 
-## [1.14] - 2021-02-?
+## [1.15] - 2021-02-?
+
+### Added
+- New auto-update system from GitHub latest plugin release.
+- New ::DYE::TXT page for single-page text entry (or just showing text if read-only).
+
+### Changed
+- Solved bug that settings initialized to an empty string were not being stored into DYE_settings.tdb.
+
+## [1.14] - 2021-02-03
 
 ### Added
 - New settings "last_shot_DSx_home_coords" and "next_shot_DSx_home_coords" to allow user-positioning or disabling of each shot desc & icon in the DSx home page. Specially useful for the new user-customizable DSx home page. 
