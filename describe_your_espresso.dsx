@@ -295,7 +295,7 @@ proc ::DYE::save_espresso_to_history_hook { args } {
 # Returns a string with the summary description of the shot selected on the left side of the DSx History Viewer.
 # Needs the { args } as this is being used in a trace add execution.
 proc ::DYE::define_past_shot_desc { args } {
-	if { $::settings(skin) eq "DSx" } {
+	if { $::settings(skin) eq "DSx" && [info exists ::DSx_settings(past_bean_brand)] } {
 		set ::DYE::past_shot_desc [shot_description_summary $::DSx_settings(past_bean_brand) \
 			$::DSx_settings(past_bean_type) $::DSx_settings(past_roast_date) $::DSx_settings(past_grinder_model) \
 			$::DSx_settings(past_grinder_setting) $::DSx_settings(past_drink_tds) $::DSx_settings(past_drink_ey) \
@@ -315,7 +315,7 @@ proc ::DYE::define_past_shot_desc { args } {
 # Needs the { args } as this is being used in a trace add execution.
 proc ::DYE::define_past_shot_desc2 { args } {
 	if { $::settings(skin) eq "DSx" } {
-		if {$::DSx_settings(history_godshots) == "history"} {
+		if {$::DSx_settings(history_godshots) == "history" && [info exists ::DSx_settings(past_bean_brand2)] } {
 			set ::DYE::past_shot_desc2 [shot_description_summary $::DSx_settings(past_bean_brand2) \
 				$::DSx_settings(past_bean_type2) $::DSx_settings(past_roast_date2) $::DSx_settings(past_grinder_model2) \
 				$::DSx_settings(past_grinder_setting2) $::DSx_settings(past_drink_tds2) $::DSx_settings(past_drink_ey2) \
@@ -338,7 +338,7 @@ proc ::DYE::define_past_shot_desc2 { args } {
 # Returns a string with the summary description of the next shot.
 # Needs the { args } as this is being used in a trace add execution.
 proc ::DYE::define_next_shot_desc { args } {
-	if { $::DYE::settings(show_shot_desc_on_home) == 1 } {
+	if { $::DYE::settings(show_shot_desc_on_home) == 1 && [info exists ::DYE::settings(next_bean_brand)] } {
 		set desc [shot_description_summary $::DYE::settings(next_bean_brand) \
 			$::DYE::settings(next_bean_type) $::DYE::settings(next_roast_date) $::DYE::settings(next_grinder_model) \
 			$::DYE::settings(next_grinder_setting) {} {} {} 2 "\[Tap to describe the next shot\]" ]
@@ -2056,6 +2056,7 @@ proc ::DYE::GUI::add_multiline_entry { page field_name x_label y_label x_widget 
 	DYE::args_add_option_if_not_exists args -height $height
 	DYE::args_add_option_if_not_exists args -font [DSx_font font $::DYE::GUI::font_size]
 	set dropdown_callback_cmd [DYE::args_get_option args -dropdown_callback_cmd "${page}::select_${field_name}_callback" 1]
+	set editor_page [DYE::args_get_option args -editor_page 1 1]
 	
 	DYE::args_add_option_if_not_exists args -relief sunken
 	DYE::args_add_option_if_not_exists args -borderwidth 1 
@@ -2067,7 +2068,7 @@ proc ::DYE::GUI::add_multiline_entry { page field_name x_label y_label x_widget 
 	DYE::args_add_option_if_not_exists args -exportselection 1
 #	DYE::args_add_option_if_not_exists args -disabledbackground $::DYE::GUI::disabled_color
 #	DYE::args_add_option_if_not_exists args -disabledforeground $::DYE::GUI::bg_color
-
+	
 	if { $x_label > -1 && $y_label > -1 } {
 		set label_args [DYE::args_extract_prefixed args -label_]
 		DYE::args_add_option_if_not_exists label_args -font [DSx_font font $::DYE::GUI::font_size] 
@@ -2086,7 +2087,7 @@ proc ::DYE::GUI::add_multiline_entry { page field_name x_label y_label x_widget 
 	
 	set widget [::add_de1_widget $page multiline_entry $x_widget $y_widget {
 			bind $widget <Return> { hide_android_keyboard ; focus [tk_focusNext %W] }
-		} -exportselection 1 {*}$args ]
+		} {*}$args ]
 	
 	if { $data_type eq "text" || $data_type eq "long_text" || $data_type eq "category" } {
 		set leave_cmd "set $textvariable \[string trim \$$textvariable\]; hide_android_keyboard;"
@@ -2094,6 +2095,16 @@ proc ::DYE::GUI::add_multiline_entry { page field_name x_label y_label x_widget 
 		set leave_cmd "hide_android_keyboard"
 	}	
 	bind $widget <Leave> $leave_cmd
+	
+	# Double-tap binding doesn't work on multiline_entry. Think of an alternative way.
+#	if { $editor_page == 1 } { 
+#		set editor_cmd "if \{ \[$widget cget -state\] eq \"normal\" \} \{ 
+#			::DYE::TXT::load_page $field_name $textvariable 1
+#		\} elseif \{ \[$widget cget -state\] eq \"disabled\" \} \{
+#			::DYE::TXT::load_page $field_name $textvariable 0
+#		\}"
+#		bind $widget <Double-Button-1> { set ::DYE::debug_text "DBL_CLICK"; continue }
+#	}
 	
 	if { $has_ns } { set "${page}::widgets($widget_name)" $widget }
 	
@@ -5628,10 +5639,10 @@ proc ::DYE::TXT::setup_ui {} {
 	# Value being edited
 	set x_left_center 550; set y 275
 	::DYE::GUI::add_multiline_entry $page $data(field_name) -1 -1 100 200 115 24 \
-		-textvariable ::DYE::TXT::data(value) -widget_name value
+		-textvariable ::DYE::TXT::data(value) -widget_name value -editor_page 0
 	
 	# Erase button
-	::DYE::GUI::add_symbol $page 100 1700 eraser -size medium -has_button 1 \
+	::DYE::GUI::add_symbol $page 100 900 eraser -size medium -has_button 1 \
 		-button_cmd { set ::DYE::TXT::data(value) "" }
 }
 

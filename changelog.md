@@ -7,14 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New page "Other equipment". New user-defined field "other_equipement". New DB tables "shot_equipment", "equipment" & "equipment_type".
 - New page "Modify category", which shows exactly which shots will be modified and allows the user to backup modified files and modify only a subset of files. Also shows progress information.
 
-## [1.15] - 2021-02-?
+## [1.15] - 2021-02-06
 
 ### Added
-- New auto-update system from GitHub latest plugin release.
+- New plugin auto-update system from GitHub latest release (suggested by @TMC)
 - New ::DYE::TXT page for single-page text entry (or just showing text if read-only).
 
 ### Changed
 - Solved bug that settings initialized to an empty string were not being stored into DYE_settings.tdb.
+- Solved bug reported by @Idan that having never put a chart on the right side of the History Viewer could raise
+a runtime error in proc ::DYE::define_past_shot_desc2 when tapping on the "Temperature on/off" button.
 
 ## [1.14] - 2021-02-03
 
