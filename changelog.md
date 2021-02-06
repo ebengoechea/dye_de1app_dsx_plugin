@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New page "Other equipment". New user-defined field "other_equipement". New DB tables "shot_equipment", "equipment" & "equipment_type".
 - New page "Modify category", which shows exactly which shots will be modified and allows the user to backup modified files and modify only a subset of files. Also shows progress information.
 
-## [1.15] - 2021-02-06
+## [1.16] - 2021-02-06
 
 ### Added
 - New plugin auto-update system from GitHub latest release (suggested by @TMC)
