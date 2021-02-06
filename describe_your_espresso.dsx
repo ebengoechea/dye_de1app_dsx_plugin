@@ -149,7 +149,7 @@ proc ::DYE::main {} {
 	foreach ns {DE IS NUME FSH CFG SEQ MODC MENU TXT GUI} { ::DYE::${ns}::setup_ui }	
 	save_settings
 	
-	if { $::debugging == 1 && $::android != 1 } {
+	if { [ifexists $::debugging 0] == 1 && $::android != 1 } {
 		ifexists ::debugging_window_title "Decent"
 		wm title . "$::debugging_window_title DYE v$::DYE::plugin_version"
 	}
@@ -2553,7 +2553,7 @@ proc ::DYE::DB::get_db {} {
 	variable db
 	if { $db eq {} } { 
 		sqlite3 db "[homedir]/$::DYE::settings(db_path)" -create 0
-		if { [ifexists ::debugging] == 1 } {
+		if { [ifexists ::debugging 0] == 1 } {
 			db trace ::DYE::DB::log_sql_statement
 		}
 	}
