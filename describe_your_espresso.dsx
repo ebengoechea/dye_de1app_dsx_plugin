@@ -82,6 +82,8 @@ namespace eval DYE {
 		
 	variable data_dictionary
 	array set data_dictionary {
+		profile_title {"Profile" "Profiles" "Profile" "Profiles" \
+			"" shot "" "" "" profile_title category 0 0 0}
 		bean_brand {"Beans roaster" "Beans roasters" "Roaster" "Roasters" \
 			bean shot "" "" "" bean_brand category 0 0 0}
 		bean_type {"Beans type" "Beans types" "Name" "Names" \
@@ -2130,6 +2132,96 @@ proc ::DYE::GUI::relocate_dropdown_arrows { arr_widgets field_names } {
 	}
 }
 
+# Moves a widget with respect to another, i.e. to a position relative to another one.
+# pos can be any of "n", "nw", "ne", "s", "sw", "se", "w", "wn", "ws", "e", "en", "es".
+# xoffset and yoffset define a fixed offset with respect to the coordinates obtained from processing 'pos'. 
+#	Can be positive or negative.
+# anchor is how to position widget relative to the point obtained after processing pos & offsets. Takes the
+#	same values as the standard -anchor option. If not defined, keeps the existing widget -anchor.
+# move_too is a list of widgets that will be repositioned together with widget, maintaining the same relative
+#	distances to widget as they had originally. Typically used for the rectangle "button" areas around text labels.
+proc ::DYE::GUI::relocate_text_wrt { widget wrt { pos w } { xoffset 0 } { yoffset 0 } { anchor {} } { move_too {} } } {
+	lassign [.can bbox $wrt ] x0 y0 x1 y1 
+	lassign [.can bbox $widget ] wx0 wy0 wx1 wy1
+	
+	if { $pos eq "center" } {
+		set newx [expr {$x0+int(($x1-$x0)/2)+$xoffset}]
+		set newy [expr {$y0+int(($y1-$y0)/2)+$yoffset}]
+	} else {
+		set pos1 [string range $pos 0 0]
+		set pos2 [string range $pos 1 1]
+		
+		if { $pos1 eq "w" || $pos1 eq ""} {
+			set newx [expr {$x0+$xoffset}]
+			
+			if { $pos2 eq "n" } {
+				set newy [expr {$y0+$yoffset}]
+			} elseif { $pos2 eq "s" } {
+				set newy [expr {$y1+$yoffset}]
+			} else {
+				set newy [expr {$y0+int(($y1-$y0)/2)+$yoffset}]
+			}
+		} elseif { $pos1 eq "e" } {
+			set newx [expr {$x1+$xoffset}]
+			
+			if { $pos2 eq "n" } {
+				set newy [expr {$y0+$yoffset}]
+			} elseif { $pos2 eq "s" } {
+				set newy [expr {$y1+$yoffset}]
+			} else {
+				set newy [expr {$y0+int(($y1-$y0)/2)+$yoffset}]
+			}			
+		} elseif { $pos1 eq "n" } {
+			set newy [expr {$y0+$yoffset}]
+			
+			if { $pos2 eq "w" } {
+				set newx [expr {$x0+$xoffset}]
+			} elseif { $pos2 eq "e" } {
+				set newx [expr {$x1+$xoffset}]
+			} else {
+				set newx [expr {$x0+int(($x1-$x0)/2)+$xoffset}]
+			}
+		} elseif { $pos1 eq "s" } {
+			set newy [expr {$y1+$yoffset}]
+			
+			if { $pos2 eq "w" } {
+				set newx [expr {$x0+$xoffset}]
+			} elseif { $pos2 eq "e" } {
+				set newx [expr {$x1+$xoffset}]
+			} else {
+				set newx [expr {$x0+int(($x1-$x0)/2)+$xoffset}]
+			}
+		} else return 
+	}
+	
+	if { $anchor ne "" } {
+		# Embedded in catch as widgets like rectagles don't support -anchor
+		catch { .can itemconfigure $widget -anchor $anchor }
+	}
+	# Don't use 'moveto' as then -anchor is not acknowledged
+	.can coords $widget "$newx $newy"
+	
+	if { $move_too ne "" } {
+		lassign [.can bbox $widget] newx newy
+		
+		foreach w $move_too {			
+			set mtcoords [.can coords $w]
+			set mtxoffset [expr {[lindex $mtcoords 0]-$wx0}]
+			set mtyoffset [expr {[lindex $mtcoords 1]-$wy0}]
+			
+			if { [llength $mtcoords] == 2 } {
+				.can coords $w "[expr {$newx+$mtxoffset}] [expr {$newy+$mtyoffset}]"
+			} elseif { [llength $mtcoords] == 4 } {
+				.can coords $w "[expr {$newx+$mtxoffset}] [expr {$newy+$mtyoffset}] \
+					[expr {$newx+$mtxoffset+[lindex $mtcoords 2]-[lindex $mtcoords 0]}] \
+					[expr {$newy+$mtyoffset+[lindex $mtcoords 3]-[lindex $mtcoords 1]}]"
+			}
+		}
+	}
+	
+	return "$newx $newy"
+}
+
 # Adds a listbox widget, its (optional) label and its scrollbar, using DYE GUI standards. New widgets
 # 	<widget_name>, <widget_name_label>, <widget_name_scrollbar> and <widget_name_slider> are added to the namespace
 # 	widgets array.
@@ -2156,7 +2248,7 @@ proc ::DYE::GUI::add_listbox { page widget_name x_label y_label x_widget y_widge
 	DYE::args_add_option_if_not_exists args -justify left
 	DYE::args_add_option_if_not_exists args -foreground $::DYE::GUI::font_color 
 	DYE::args_add_option_if_not_exists args -exportselection 0
-	DYE::args_add_option_if_not_exists args -selectmode single
+	DYE::args_add_option_if_not_exists args -selectmode browser
 	
 	set scrollbar_width [rescale_y_skin [DYE::args_get_option args -scrollbar_width 75 1]]
 	set scrollbar_height [rescale_x_skin [DYE::args_get_option args -scrollbar_height 75 1]]
@@ -3346,44 +3438,44 @@ proc ::DYE::DB::available_categories { field_name {exc_removed_shots 1} {filter 
 	
 	set fields {}
 	set grouping_fields {}
-	lappend fields "TRIM(t.$field_name) as $field_name"
-	lappend grouping_fields "TRIM(t.$field_name)"
+	lappend fields "TRIM($field_name) as $field_name"
+	lappend grouping_fields "TRIM($field_name)"
 	
 	set extra_from ""
 	set extra_wheres {}
 	set type1_db_table ""
 	if { $db_type_column1 ne "" } { 
-		lappend fields "TRIM(t.$db_type_column1) AS $db_type_column1" 
-		lappend grouping_fields "TRIM(t.$db_type_column1)"
+		lappend fields "TRIM($db_type_column1) AS $db_type_column1" 
+		lappend grouping_fields "TRIM($db_type_column1)"
 		if { $use_lookup_table == 1 } {							
 			lassign [::DYE::field_lookup $db_type_column1 {lookup_table}] type1_db_table 
 			if { $type1_db_table ne "" } {
-				append extra_from "LEFT JOIN $type1_db_table t1 ON t.$db_type_column1=t1.$db_type_column1 "
+				append extra_from "LEFT JOIN $type1_db_table ON $db_type_column1=${type1_db_table}.$db_type_column1 "
 			}
 		}
 		
 		if { [llength $args] > 0 && [lindex $args 0] ne "" } {
-			lappend extra_wheres "t.$db_type_column1 IN ([::DYE::DB::strings2sql [lindex $args 0]])"
+			lappend extra_wheres "$db_type_column1 IN ([::DYE::DB::strings2sql [lindex $args 0]])"
 		}
 	}
 	
 	if { $db_type_column2 ne "" } { 
-		lappend fields "TRIM(t.$db_type_column2) as $db_type_column2" 
-		lappend grouping_fields "TRIM(t.$db_type_column2)"
+		lappend fields "TRIM($db_type_column2) as $db_type_column2" 
+		lappend grouping_fields "TRIM($db_type_column2)"
 		if { [llength $args] > 1 && [lindex $args 1] ne "" } {
-			lappend extra_wheres "t.$db_type_column2 IN ([::DYE::DB::strings2sql [lindex $args 1]])"
+			lappend extra_wheres "$db_type_column2 IN ([::DYE::DB::strings2sql [lindex $args 1]])"
 		}
 	}
 	
 	if { $db_table eq "shot" } {
-		set sql "SELECT [join $fields ,] FROM shot t "
+		set sql "SELECT [join $fields ,] FROM shot "
 	} elseif { $use_lookup_table } {
-		set sql "SELECT [join $fields ,] FROM $lookup_table t $extra_from"
+		set sql "SELECT [join $fields ,] FROM $lookup_table $extra_from"
 	} else {
-		set sql "SELECT [join $fields ,] FROM $db_table t INNER JOIN shot s ON t.clock=s.clock "
+		set sql "SELECT [join $fields ,] FROM $db_table INNER JOIN shot ON ${db_table}.clock=shot.clock "
 	}
 	
-	append sql "WHERE LENGTH(TRIM(COALESCE(t.$field_name,''))) > 0 "
+	append sql "WHERE LENGTH(TRIM(COALESCE($field_name,''))) > 0 "
 	if { $exc_removed_shots == 1 && $use_lookup_table == 0 } { append sql "AND shot.removed=0 " }
 	if { $filter ne "" } { append sql "AND $filter " }
 	if { [llength $extra_wheres] > 0 } { append sql "AND [join $extra_wheres { AND }] "  }
@@ -3395,12 +3487,12 @@ proc ::DYE::DB::available_categories { field_name {exc_removed_shots 1} {filter 
 	append sql "ORDER BY "
 	if { $field_name eq "grinder_setting" } {
 		# TODO Include sorting in data dictionary!
-		append sql "TRIM(t.$field_name)"
+		append sql "TRIM($field_name)"
 	} elseif { $use_lookup_table == 1 }  { 
 		if { $type1_db_table ne ""} {
-			append sql "t1.sort_number,"
+			append sql "${type1_db_table}.sort_number,"
 		}
-		append sql "t.sort_number"
+		append sql "sort_number"
 	} else {
 		append sql "MAX(shot.clock)"
 	}
@@ -3415,13 +3507,13 @@ proc ::DYE::DB::available_categories { field_name {exc_removed_shots 1} {filter 
 		db eval "$sql LIMIT 1" columns break
 		set fields $columns(*)
 #msg "DYE DEBUG available_categories, columns=$fields"
-				
+		
 		foreach fn $fields { set result($fn) {} }
 		db eval "$sql" {
 			for {set i 0} {$i < [llength $fields]} {incr i 1} {
 				lappend result([lindex $fields $i]) [subst $[lindex $fields $i]]
 			}
-		}		
+		}
 		return [array get result]
 	}
 }
@@ -5675,25 +5767,27 @@ proc ::DYE::TXT::page_done {} {
 ### "FILTER SHOT HISTORY" PAGE #########################################################################################
 
 namespace eval ::DYE::FSH {
-	# State variables for the "Filter Shot History" page. Not persisted. 
 	variable widgets
-	array set widgets {
-		profiles_widget {}
-		profiles_scrollbar_widget {}
-		profiles_slider 0
-		beans_widget {}
-		beans_scrollbar_widget {}
-		beans_slider 1
-		shots_widget {}
-		shots_scrollbar_widget {}
-		shots_slider 2
-	}
+	array set widgets {}
+	#		profiles_widget {}
+	#		profiles_scrollbar_widget {}
+	#		profiles_slider 0
+	#		beans_widget {}
+	#		beans_scrollbar_widget {}
+	#		beans_slider 1
+	#		shots_widget {}
+	#		shots_scrollbar_widget {}
+	#		shots_slider 2
+		
 	
-	# Widgets in the page bind to variables in data, so they can be changed dinamically to load and save to different 
-	# shots (last, next or those selected in the left or right of the history viewer).
 	variable data
 	array set data {
 		page_name "::DYE::FSH"
+		page_title "Filter Shot History"
+		category1 {profile_title}
+		categories1_label {Profiles}
+		category2 {beans}
+		categories2_label {Beans}
 		left_filter_status {off}
 		right_filter_status {off}
 		left_filter_shots {}
@@ -5714,22 +5808,30 @@ namespace eval ::DYE::FSH {
 		order_by_date "Date"
 		order_by_tds "TDS"
 		order_by_ey "EY"
-		order_by_enjoyment "Enjoyment"	
+		order_by_enjoyment "Enjoyment"
 	}
 }
 
 # Prepare the DYE_filter_shot_history page.
-proc ::DYE::FSH::load_page {} {
+proc ::DYE::FSH::load_page { {category1 profile_title} {category2 bean_brand} } {
 	variable widgets
 	variable data
-	fill_profiles_listbox
-	fill_beans_listbox
+	set ns [namespace current]
+	
+	foreach fn "category1 category2" { set data($fn) {} }
+
+	category1_change $category1
+	category2_change $category2
 	set_order_by date
 
-	page_to_show_when_off [namespace current]	
-	::DYE::GUI::set_scrollbars_dims ::DYE::FSH "profiles beans shots"
-		
-	if { $::DYE::settings(use_stars_to_rate_enjoyment) == 1 } {		
+	page_to_show_when_off $ns
+	::DYE::GUI::set_scrollbars_dims $ns "categories1 categories2 shots"
+	::DYE::GUI::relocate_text_wrt $widgets(reset_categories1) $widgets(categories1_scrollbar) ne 0 -12 se \
+		$widgets(reset_categories1_button)
+	::DYE::GUI::relocate_text_wrt $widgets(reset_categories2) $widgets(categories2_scrollbar) ne 0 -12 se \
+		$widgets(reset_categories2_button) 
+	
+	if { $::DYE::settings(use_stars_to_rate_enjoyment) == 1 } {
 		.can itemconfig $widgets(enjoyment_from) -state hidden
 		.can itemconfig $widgets(enjoyment_to_label) -state hidden
 		.can itemconfig $widgets(enjoyment_to) -state hidden
@@ -5767,21 +5869,24 @@ proc ::DYE::FSH::setup_ui {} {
 	variable data
 	set page [namespace current]
 	
-	::DYE::GUI::add_page $page -title [translate "Filter Shot History"] -cancel_button 0 -buttons_loc center
+	# -title [translate "Filter Shot History"] 
+	::DYE::GUI::add_page $page -cancel_button 0 -buttons_loc center
 	
-	# Profiles listbox
+	# Categories1 listbox
 	set x_left 60; set y 120
-	::DYE::GUI::add_listbox $page profiles $x_left $y $x_left [expr {$y+80}] 25 10 -label	[translate "Profiles"] \
-		-label_font [DSx_font font 10]
-	::DYE::GUI::add_text $page [expr {$x_left+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" -widget_name reset_profiles \
-		-fill $::DYE::GUI::remark_color -has_button 1 -button_cmd ::DYE::FSH::reset_profiles_click -button_width 150
+	::DYE::GUI::add_listbox $page categories1 $x_left $y $x_left [expr {$y+80}] 25 10 -label_font [DSx_font font 10] \
+		-selectmode multiple
+	::DYE::GUI::add_text $page [expr {$x_left+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" \
+		-widget_name reset_categories1 -fill $::DYE::GUI::remark_color -has_button 1 \
+		-button_cmd ::DYE::FSH::reset_categories1_click -button_width 150
 	
-	# Beans listbox
+	# Categories2 listbox
 	set x_left2 700
-	::DYE::GUI::add_listbox $page beans 700 $y $x_left2 [expr {$y+80}] 25 10 -label [translate "Beans"] \
-		-label_font [DSx_font font 10]
-	::DYE::GUI::add_text $page [expr {$x_left2+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" -widget_name reset_beans \
-		-fill $::DYE::GUI::remark_color -has_button 1 -button_cmd ::DYE::FSH::reset_beans_click -button_width 150
+	::DYE::GUI::add_listbox $page categories2 700 $y $x_left2 [expr {$y+80}] 25 10 -label_font [DSx_font font 10] \
+		-selectmode multiple
+	::DYE::GUI::add_text $page [expr {$x_left2+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" \
+		-widget_name reset_categories2 -fill $::DYE::GUI::remark_color -has_button 1 \
+		-button_cmd ::DYE::FSH::reset_categories2_click -button_width 150
 	
 	# Date period from
 	set x_right_label 1450; set x_right_widget 1725; set y 200
@@ -5853,38 +5958,91 @@ proc ::DYE::FSH::setup_ui {} {
 		{$::DYE::FSH::data(right_filter_status)} filter ::DYE::FSH::apply_to_right_side_click
 }
 
-# Fills the elements of the Profiles listbox in the Search Shots History page.
-proc ::DYE::FSH::fill_profiles_listbox {} {
-	set db ::DYE::DB::get_db
-	set profiles [db eval {SELECT profile_title FROM shot WHERE LENGTH(COALESCE(profile_title,''))>0 AND removed=0
-		GROUP BY profile_title ORDER BY count(*) DESC}]
+proc ::DYE::FSH::category1_change { new_category } {
+	variable data	
+	if { $data(category1) eq $new_category } return
 		
-	set widget $::DYE::FSH::widgets(profiles)
-	$widget delete 0 end
-	$widget insert 0 {*}$profiles
-}
-
-proc ::DYE::FSH::reset_profiles_click {} {
-	say [translate {reset}] $::settings(sound_button_in)
-	$::DYE::FSH::widgets(profiles) selection clear 0 end
-}
-
-proc ::DYE::FSH::reset_beans_click {} {
-	say [translate {reset}] $::settings(sound_button_in)
-	$::DYE::FSH::widgets(beans) selection clear 0 end
-}
-
-# Fills the elements of the Beans listbox in the Search Shots History page.
-proc ::DYE::FSH::fill_beans_listbox {} {
-	set db ::DYE::DB::get_db
-	set beans [db eval {
-		SELECT bean_desc FROM V_shot WHERE LENGTH(bean_desc) > 0 AND removed=0
-		GROUP BY bean_desc ORDER BY MAX(clock) DESC}]
+	set data(category1) {}
+	if { $new_category ne "" } {
+		lassign [::DYE::field_lookup $new_category "name_plural data_type"] name_plural data_type
+		if { $name_plural eq "" } {
+			msg "DYE: ERROR on FSH::load_page, category1='$new_category' not found"
+			return
+		}
+		if { $data_type ne "category" } {
+			msg "DYE: ERROR on FSH::load_page, field '$new_category' is not a category"
+			return
+		}
+		set data(category1) $new_category
+		set data(categories1_label) [translate $name_plural]
+	}
 	
-	set widget $::DYE::FSH::widgets(beans)
-	$widget delete 0 end	
-	$widget insert 0 {*}$beans
+	fill_categories1_listbox
 }
+
+proc ::DYE::FSH::fill_categories1_listbox {} {
+	variable data
+	variable widgets
+#	set db ::DYE::DB::get_db
+#	set profiles [db eval {SELECT profile_title FROM shot WHERE LENGTH(COALESCE(profile_title,''))>0 AND removed=0
+#		GROUP BY profile_title ORDER BY count(*) DESC}]	
+	$widgets(categories1) delete 0 end
+
+	if { $data(category1) ne "" } {
+		set cat_values [::DYE::DB::available_categories $data(category1)]
+		$widgets(categories1) insert 0 {*}$cat_values
+	}
+}
+
+proc ::DYE::FSH::reset_categories1_click {} {
+	variable widgets
+	say [translate {reset}] $::settings(sound_button_in)
+	$widgets(categories1) selection clear 0 end
+}
+
+proc ::DYE::FSH::category2_change { new_category } {
+	variable data	
+	if { $data(category2) eq $new_category } return
+		
+	set data(category2) {}
+	if { $new_category ne "" } {
+		lassign [::DYE::field_lookup $new_category "name_plural data_type"] name_plural data_type
+		if { $name_plural eq "" } {
+			msg "DYE: ERROR on FSH::load_page, category2='$new_category' not found"
+			return
+		}
+		if { $data_type ne "category" } {
+			msg "DYE: ERROR on FSH::load_page, field '$new_category' is not a category"
+			return			
+		}
+		set data(category2) $new_category
+		set data(categories2_label) [translate $name_plural]
+	}
+	
+	fill_categories2_listbox
+}
+
+proc ::DYE::FSH::fill_categories2_listbox {} {
+	variable widgets
+	variable data
+#	set db ::DYE::DB::get_db
+#	set beans [db eval {
+#		SELECT bean_desc FROM V_shot WHERE LENGTH(bean_desc) > 0 AND removed=0
+#		GROUP BY bean_desc ORDER BY MAX(clock) DESC}]
+	$widgets(categories2) delete 0 end
+
+	if { $data(category2) ne "" } {
+		set cat_values [::DYE::DB::available_categories $data(category2)]
+		$widgets(categories2) insert 0 {*}$cat_values
+	}
+}
+
+proc ::DYE::FSH::reset_categories2_click {} {
+	variable widgets
+	say [translate {reset}] $::settings(sound_button_in)
+	$widgets(categories2) selection clear 0 end
+}
+
 
 proc ::DYE::FSH::date_from_leave {} {
 	variable widgets
@@ -5952,8 +6110,8 @@ proc ::DYE::FSH::reset_click {} {
 	variable widgets
 	say [translate {reset}] $::settings(sound_button_in)
 	
-	$widgets(profiles) selection clear 0 end
-	$widgets(beans) selection clear 0 end
+	$widgets(categories1) selection clear 0 end
+	$widgets(categories2) selection clear 0 end
 	set data(date_from) {}
 	set data(date_to) {}
 	set data(tds_from) {}
@@ -5980,23 +6138,31 @@ proc ::DYE::FSH::search_shot_history {} {
 	# Build the SQL SELECT statement
 	set where_conds {}
 	
-	set profiles_widget $widgets(profiles)
-	if {[$profiles_widget curselection] ne ""} {
-		set profiles {}
-		foreach idx [$profiles_widget curselection] {
-			lappend profiles [$profiles_widget get $idx]
-		}
-		lappend where_conds "profile_title IN ([::DYE::DB::strings2sql $profiles])"
+	set c1_values [::DYE::GUI::listbox_get_selection $widgets(categories1)]
+	if { $c1_values ne "" } {
+		lappend where_conds "$data(category1) IN ([::DYE::DB::strings2sql $c1_values])"
 	}
+#	set c1_widget $widgets(categories1)
+#	if {[$c1_widget curselection] ne ""} {
+#		set c1_values {}
+#		foreach idx [$c1_widget curselection] {
+#			lappend c1_values [$c1_widget get $idx]
+#		}
+#		lappend where_conds "$data(category1) IN ([::DYE::DB::strings2sql $c1_values])"
+#	}
 
-	set beans_widget $widgets(beans)
-	if {[$beans_widget curselection] ne ""} {
-		set beans {}
-		foreach idx [$beans_widget curselection] {
-			lappend beans [$beans_widget get $idx]
-		}
-		lappend where_conds "bean_desc IN ([::DYE::DB::strings2sql $beans])"
+	set c2_values [::DYE::GUI::listbox_get_selection $widgets(categories2)]
+	if { $c2_values ne "" } {
+		lappend where_conds "$data(category2) IN ([::DYE::DB::strings2sql $c2_values])"
 	}
+#	set c2_widget $widgets(categories2)
+#	if {[$c2_widget curselection] ne ""} {
+#		set c2_values {}
+#		foreach idx [$c2_widget curselection] {
+#			lappend c2_values [$c2_widget get $idx]
+#		}
+#		lappend where_conds "bean_desc IN ([::DYE::DB::strings2sql $beans])"
+#	}
 	
 	if { $data(date_from) ne "" } {
 		set from_clock [clock scan "$data(date_from) 00:00:00" -format "$::DYE::settings(date_format) %H:%M:%S"]

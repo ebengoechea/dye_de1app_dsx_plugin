@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New page "Other equipment". New user-defined field "other_equipement". New DB tables "shot_equipment", "equipment" & "equipment_type".
 - New page "Modify category", which shows exactly which shots will be modified and allows the user to backup modified files and modify only a subset of files. Also shows progress information.
 
+## [1.16] - 2021-02-?
+
+### Added
+- The 2 search criteria category listboxes in the Filter Shot History page now can be redefined by the user.
+- New proc ::DYE::GUI::relocate_widget_wrt to help placing widgets relative to one another.
+
+### Changed
+- Listboxes default selectmode changed from "single" to "browse".
+- On FSH page, the [Reset] buttons are now aligned dinamically using relocate_widget_wrt.
+
 ## [1.15] - 2021-02-06
 
 ### Added
