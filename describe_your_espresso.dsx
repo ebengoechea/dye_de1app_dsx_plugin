@@ -2124,8 +2124,8 @@ proc ::DYE::GUI::add_multiline_entry { page field_name x_label y_label x_widget 
 proc ::DYE::GUI::relocate_dropdown_arrows { arr_widgets field_names } {
 	upvar $arr_widgets widgets
 	foreach fn $field_names {
-		set coords [.can coords $widgets($fn) ]	
-		set newx [expr {[winfo width $widgets($fn)] + [lindex $coords 0] + 10}]
+		set coords [.can bbox $widgets($fn) ]		
+		set newx [expr {[lindex $coords 2] + 10}]		
 		set newy [expr {[lindex $coords 1] - 10 }]
 		.can coords $widgets(${fn}_dropdown) "$newx $newy"	
 		.can coords $widgets(${fn}_dropdown_button) "[expr {$newx-5}] $newy [expr {$newx+60}] [expr {$newy+60}]"
@@ -5829,7 +5829,9 @@ proc ::DYE::FSH::load_page { {category1 profile_title} {category2 bean_brand} } 
 	::DYE::GUI::relocate_text_wrt $widgets(reset_categories1) $widgets(categories1_scrollbar) ne 0 -12 se \
 		$widgets(reset_categories1_button)
 	::DYE::GUI::relocate_text_wrt $widgets(reset_categories2) $widgets(categories2_scrollbar) ne 0 -12 se \
-		$widgets(reset_categories2_button) 
+		$widgets(reset_categories2_button)
+msg "DYE DEBUG: FSH::load_page widgets_names=[array names ::DYE::FSH::widgets]"	
+	::DYE::GUI::relocate_dropdown_arrows ::DYE::FSH::widgets "categories1_label categories2_label"
 	
 	if { $::DYE::settings(use_stars_to_rate_enjoyment) == 1 } {
 		.can itemconfig $widgets(enjoyment_from) -state hidden
@@ -5876,6 +5878,14 @@ proc ::DYE::FSH::setup_ui {} {
 	set x_left 60; set y 120
 	::DYE::GUI::add_listbox $page categories1 $x_left $y $x_left [expr {$y+80}] 25 10 -label_font [DSx_font font 10] \
 		-selectmode multiple
+	
+	set "${page}::widgets(categories1_label_dropdown)" [::add_de1_text $page [expr {$x_left+300}] \
+		[expr {$y+0}] -font fontawesome_reg_small -fill $::DYE::GUI::font_color -anchor "nw" -justify "left" \
+		-text $DYE::GUI::symbol_sort_down ]							
+	set "${page}::widgets(categories1_label_dropdown_button)" [::add_de1_button $page {} \
+		[expr {$x_left}] $y [expr {$x_left+360}] [expr {$y+68}] ]
+	
+	# Reset categories1
 	::DYE::GUI::add_text $page [expr {$x_left+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" \
 		-widget_name reset_categories1 -fill $::DYE::GUI::remark_color -has_button 1 \
 		-button_cmd ::DYE::FSH::reset_categories1_click -button_width 150
@@ -5884,6 +5894,14 @@ proc ::DYE::FSH::setup_ui {} {
 	set x_left2 700
 	::DYE::GUI::add_listbox $page categories2 700 $y $x_left2 [expr {$y+80}] 25 10 -label_font [DSx_font font 10] \
 		-selectmode multiple
+
+	set "${page}::widgets(categories2_label_dropdown)" [::add_de1_text $page [expr {$x_left2+300}] \
+		[expr {$y+0}] -font fontawesome_reg_small -fill $::DYE::GUI::font_color -anchor "nw" -justify "left" \
+		-text $DYE::GUI::symbol_sort_down ]							
+	set "${page}::widgets(categories2_label_dropdown_button)" [::add_de1_button $page {} \
+		[expr {$x_left2}] $y [expr {$x_left2+360}] [expr {$y+68}] ]
+	
+	# Reset categories2
 	::DYE::GUI::add_text $page [expr {$x_left2+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" \
 		-widget_name reset_categories2 -fill $::DYE::GUI::remark_color -has_button 1 \
 		-button_cmd ::DYE::FSH::reset_categories2_click -button_width 150
