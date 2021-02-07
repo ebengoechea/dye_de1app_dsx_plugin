@@ -84,6 +84,8 @@ namespace eval DYE {
 	array set data_dictionary {
 		profile_title {"Profile" "Profiles" "Profile" "Profiles" \
 			"" shot "" "" "" profile_title category 0 0 0}
+		bean_desc {"Beans" "Beans" "Beans" "Beans" \
+			bean V_shot "" "" "" bean_brand||bean_type category 0 0 0}
 		bean_brand {"Beans roaster" "Beans roasters" "Roaster" "Roasters" \
 			bean shot "" "" "" bean_brand category 0 0 0}
 		bean_type {"Beans type" "Beans types" "Name" "Names" \
@@ -98,12 +100,6 @@ namespace eval DYE {
 			equipment shot "" "" "" grinder_model category 0 100 0}
 		grinder_setting {"Grinder setting" "Grinder settings" "Setting" "Settings" \
 			equipment shot "" "" "" grinder_setting category 0 100 0}
-		equipment_type {"Equipment type" "Equipment types" "Type" "Types" \
-			equipment shot_equipment equipment_type "" "" other_equipment category 0 100 0}
-		equipment_name {"Equipment name" "Equipment names" "Equipment" "Equipment" \
-			equipment shot_equipment equipment equipment_type "" other_equipment category 0 100 0}
-		equipment_setting {"Equipment setting" "Equipment settings" "Setting" "Settings" \
-			equipment shot_equipment "" equipment_type equipment_name other_equipment category 0 100 0}
 		grinder_dose_weight {"Dose weight" "Dose weights" "Dose" "Doses" \
 			extraction shot "" "" "" grinder_dose_weight numeric 0 30 1 18 0.1 1.0}
 		drink_weight {"Drink weight" "Drink weights" "Weight" "Weights" \
@@ -121,6 +117,13 @@ namespace eval DYE {
 		drinker_name {"Drinker" "Drinkers" "Drinker" "Drinkers" \
 			people shot "" "" "" drinker_name category 0 100 0}
 	}
+
+#	equipment_type {"Equipment type" "Equipment types" "Type" "Types" \
+#		equipment shot_equipment equipment_type "" "" other_equipment category 0 100 0}
+#	equipment_name {"Equipment name" "Equipment names" "Equipment" "Equipment" \
+#		equipment shot_equipment equipment equipment_type "" other_equipment category 0 100 0}
+#	equipment_setting {"Equipment setting" "Equipment settings" "Setting" "Settings" \
+#		equipment shot_equipment "" equipment_type equipment_name other_equipment category 0 100 0}
 
 	variable desc_text_fields {bean_brand bean_type roast_date roast_level bean_notes grinder_model grinder_setting \
 		espresso_notes my_name drinker_name skin repository_links}	
@@ -151,7 +154,7 @@ proc ::DYE::main {} {
 	foreach ns {DE IS NUME FSH CFG SEQ MODC MENU TXT GUI} { ::DYE::${ns}::setup_ui }	
 	save_settings
 	
-	if { [ifexists $::debugging 0] == 1 && $::android != 1 } {
+	if { [ifexists ::debugging 0] == 1 && $::android != 1 } {
 		ifexists ::debugging_window_title "Decent"
 		wm title . "$::debugging_window_title DYE v$::DYE::plugin_version"
 	}
@@ -4127,7 +4130,7 @@ proc ::DYE::DE::setup_ui {} {
 		-fill $::DSx_settings(font_colour) -anchor "nw" -justify "left" -text $::DYE::GUI::symbol_sort_down	
 	add_de1_button $page {
 		say "" $::settings(sound_button_in)
-		DYE::IS::load_page beans ::DYE::DE::select_beans_callback \
+		DYE::IS::load_page bean_desc ::DYE::DE::select_beans_callback \
 			"$DYE::DE::data(bean_brand) $DYE::DE::data(bean_type) $DYE::DE::data(roast_date)" 
 		} [expr {$x-200}] $y [expr {$x+60}] [expr {$y+75}]
 
@@ -4252,7 +4255,7 @@ proc ::DYE::DE::setup_ui {} {
 	::DYE::GUI::add_button2 $page upload_to_visualizer $x $y "" "" file_upload \
 		::DYE::DE::upload_to_visualizer_click
 	
-	::add_de1_action $page ::DYE::DE::show_page
+	::add_de1_action $page ${page}::show_page
 }
 
 # Callback procedure returning control from the item_selection page to the describe_espresso page, to select a 
@@ -4824,9 +4827,9 @@ proc ::DYE::DE::last_shot_date {} {
 			set c $a
 			regsub {^[0]} $c {\1} c
 		}
-		if {[ifexists $::settings(enable_ampm) 1] == 1} {
+		if {[ifexists ::settings(enable_ampm) 1] == 1} {
 			set pm [clock format $last_shot_clock -format %P]
-			} else {
+		} else {
 			set pm ""
 		}
 		return "$date $c$b$pm"
@@ -5035,7 +5038,25 @@ proc ::DYE::IS::load_page { item_type callback_proc {selected {}} {selectmode {s
 				lappend items $shot_desc
 			}
 		set allow_modify 0
-	} elseif { $item_type eq "beans" } {
+	} elseif { $item_type eq "categories" } {
+		set data(page_title) [translate {Select a category}]
+		
+		set cats {}
+		foreach cat [array names ::DYE::data_dictionary ] {
+			lassign [::DYE::field_lookup $cat "data_type name"] data_type cat_name
+			if { $data_type eq "category" } {
+				lappend cats "[list $cat "$cat_name"]" 
+			}
+		}
+
+		set cats [lsort -dictionary -index 1 $cats]
+		foreach cat $cats {
+			lappend item_ids [lindex $cat 0]
+			lappend items [lindex $cat 1]
+		}
+		
+		set allow_modify 0
+	} elseif { $item_type eq "bean_desc" } {
 		set data(page_title) [translate {Select the beans batch}]
 		set sql "SELECT MAX(clock) AS clock, bean_desc FROM V_shot WHERE LENGTH(bean_desc) > 0 AND removed=0 "
 		if { $filter ne "" } { append sql " AND  $filter" }
@@ -5069,7 +5090,7 @@ proc ::DYE::IS::load_page { item_type callback_proc {selected {}} {selectmode {s
 		} elseif { $item_type eq "drinker_name" } {
 			set data(page_title) [translate {Select the drinker name}]
 		} else {
-			return 			
+			return 	
 		}
 
 		set sql "SELECT TRIM($item_type) FROM shot \
@@ -5086,9 +5107,7 @@ proc ::DYE::IS::load_page { item_type callback_proc {selected {}} {selectmode {s
 
 	if { $selected ne "" } {
 		if { [lsearch $items $selected] == -1 } {
-			if { [llength $item_ids] > 0 } {
-				lappend item_ids -1
-			}
+ 			if { [llength $item_ids] > 0 } { lappend item_ids -1 }
 			lappend items $selected
 		}
 	}
@@ -5149,8 +5168,6 @@ proc ::DYE::IS::load_page { item_type callback_proc {selected {}} {selectmode {s
 		}
 	}
 	
-	# Pause to avoid Teclast issue with the listboxes wrong selections when changing pages. But it does NOT WORK.
-	#pause 300 
 	hide_android_keyboard
 }
 		
@@ -5784,10 +5801,10 @@ namespace eval ::DYE::FSH {
 	array set data {
 		page_name "::DYE::FSH"
 		page_title "Filter Shot History"
-		category1 {profile_title}
-		categories1_label {Profiles}
+		category1 {profile_tile}
+		categories1_label {}
 		category2 {beans}
-		categories2_label {Beans}
+		categories2_label {}
 		left_filter_status {off}
 		right_filter_status {off}
 		left_filter_shots {}
@@ -5813,25 +5830,30 @@ namespace eval ::DYE::FSH {
 }
 
 # Prepare the DYE_filter_shot_history page.
-proc ::DYE::FSH::load_page { {category1 profile_title} {category2 bean_brand} } {
+proc ::DYE::FSH::load_page { {category1 profile_title} {category2 bean_desc} } {
 	variable widgets
 	variable data
 	set ns [namespace current]
 	
-	foreach fn "category1 category2" { set data($fn) {} }
-
-	category1_change $category1
-	category2_change $category2
+	set data(category1) $category1
+	set data(category2) $category2
 	set_order_by date
 
 	page_to_show_when_off $ns
+	
 	::DYE::GUI::set_scrollbars_dims $ns "categories1 categories2 shots"
 	::DYE::GUI::relocate_text_wrt $widgets(reset_categories1) $widgets(categories1_scrollbar) ne 0 -12 se \
 		$widgets(reset_categories1_button)
 	::DYE::GUI::relocate_text_wrt $widgets(reset_categories2) $widgets(categories2_scrollbar) ne 0 -12 se \
 		$widgets(reset_categories2_button)
-msg "DYE DEBUG: FSH::load_page widgets_names=[array names ::DYE::FSH::widgets]"	
-	::DYE::GUI::relocate_dropdown_arrows ::DYE::FSH::widgets "categories1_label categories2_label"
+}
+
+proc ::DYE::FSH::show_page {} {
+	variable data
+	variable widgets
+	set page [namespace current]
+	category1_change $data(category1)
+	category2_change $data(category2)
 	
 	if { $::DYE::settings(use_stars_to_rate_enjoyment) == 1 } {
 		.can itemconfig $widgets(enjoyment_from) -state hidden
@@ -5847,8 +5869,8 @@ msg "DYE DEBUG: FSH::load_page widgets_names=[array names ::DYE::FSH::widgets]"
 		.can itemconfig $widgets(enjoyment_from_rating_button) -state normal
 		.can itemconfig $widgets(enjoyment_to_rating_button) -state normal
 		
-		::DYE::GUI::draw_rating FSH espresso_enjoyment -widget_name enjoyment_from
-		::DYE::GUI::draw_rating FSH espresso_enjoyment -widget_name enjoyment_to
+		::DYE::GUI::draw_rating $page espresso_enjoyment -widget_name enjoyment_from
+		::DYE::GUI::draw_rating $page espresso_enjoyment -widget_name enjoyment_to
 	} else {
 		.can itemconfig $widgets(enjoyment_from) -state normal
 		.can itemconfig $widgets(enjoyment_to_label) -state normal
@@ -5862,7 +5884,7 @@ msg "DYE DEBUG: FSH::load_page widgets_names=[array names ::DYE::FSH::widgets]"
 		.can itemconfig $widgets(enjoyment_to_rating_label) -state hidden
 		.can itemconfig $widgets(enjoyment_from_rating_button) -state hidden
 		.can itemconfig $widgets(enjoyment_to_rating_button) -state hidden	
-	}
+	}	
 }
 
 # Setup the "Search Shot History" page User Interface.
@@ -5881,9 +5903,11 @@ proc ::DYE::FSH::setup_ui {} {
 	
 	set "${page}::widgets(categories1_label_dropdown)" [::add_de1_text $page [expr {$x_left+300}] \
 		[expr {$y+0}] -font fontawesome_reg_small -fill $::DYE::GUI::font_color -anchor "nw" -justify "left" \
-		-text $DYE::GUI::symbol_sort_down ]							
-	set "${page}::widgets(categories1_label_dropdown_button)" [::add_de1_button $page {} \
-		[expr {$x_left}] $y [expr {$x_left+360}] [expr {$y+68}] ]
+		-text $DYE::GUI::symbol_sort_down ]	
+	set "${page}::widgets(categories1_label_dropdown_button)" [::add_de1_button $page {
+			say "select" $::settings(sound_button_in)
+			::DYE::IS::load_page categories ::DYE::FSH::select_category1_callback $::DYE::FSH::data(categories1_label)
+		} [expr {$x_left}] $y [expr {$x_left+420}] [expr {$y+68}] ]
 	
 	# Reset categories1
 	::DYE::GUI::add_text $page [expr {$x_left+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" \
@@ -5898,8 +5922,10 @@ proc ::DYE::FSH::setup_ui {} {
 	set "${page}::widgets(categories2_label_dropdown)" [::add_de1_text $page [expr {$x_left2+300}] \
 		[expr {$y+0}] -font fontawesome_reg_small -fill $::DYE::GUI::font_color -anchor "nw" -justify "left" \
 		-text $DYE::GUI::symbol_sort_down ]							
-	set "${page}::widgets(categories2_label_dropdown_button)" [::add_de1_button $page {} \
-		[expr {$x_left2}] $y [expr {$x_left2+360}] [expr {$y+68}] ]
+	set "${page}::widgets(categories2_label_dropdown_button)" [::add_de1_button $page {
+			say "select" $::settings(sound_button_in)
+			::DYE::IS::load_page categories ::DYE::FSH::select_category2_callback $::DYE::FSH::data(categories2_label)
+		} [expr {$x_left2}] $y [expr {$x_left2+420}] [expr {$y+68}] ]
 	
 	# Reset categories2
 	::DYE::GUI::add_text $page [expr {$x_left2+340}] [expr {$y+15}] "\[ [translate "Reset"] \]" \
@@ -5974,16 +6000,19 @@ proc ::DYE::FSH::setup_ui {} {
 	# Button "Apply to right history"
 	::DYE::GUI::add_button2 $page apply_to_right_side 2050 $y "[translate {Apply to}]\n[translate {right side}]" \
 		{$::DYE::FSH::data(right_filter_status)} filter ::DYE::FSH::apply_to_right_side_click
+	
+	::add_de1_action $page ${page}::show_page
 }
 
 proc ::DYE::FSH::category1_change { new_category } {
-	variable data	
-	if { $data(category1) eq $new_category } return
+	variable data
+	variable widgets
+#	if { $data(category1) eq $new_category } return
 		
 	set data(category1) {}
 	if { $new_category ne "" } {
-		lassign [::DYE::field_lookup $new_category "name_plural data_type"] name_plural data_type
-		if { $name_plural eq "" } {
+		lassign [::DYE::field_lookup $new_category "name data_type"] cat_name data_type
+		if { $cat_name eq "" } {
 			msg "DYE: ERROR on FSH::load_page, category1='$new_category' not found"
 			return
 		}
@@ -5992,9 +6021,11 @@ proc ::DYE::FSH::category1_change { new_category } {
 			return
 		}
 		set data(category1) $new_category
-		set data(categories1_label) [translate $name_plural]
+		set data(categories1_label) [translate $cat_name]
+		update
 	}
 	
+	after 300 ::DYE::GUI::relocate_text_wrt $widgets(categories1_label_dropdown) $widgets(categories1_label) e 12 -6 w
 	fill_categories1_listbox
 }
 
@@ -6018,14 +6049,22 @@ proc ::DYE::FSH::reset_categories1_click {} {
 	$widgets(categories1) selection clear 0 end
 }
 
+proc ::DYE::FSH::select_category1_callback { category category_name type } {
+	variable data
+	set data(category1) $category
+	page_to_show_when_off [namespace current]	
+#	category1_change $category
+}
+
 proc ::DYE::FSH::category2_change { new_category } {
-	variable data	
-	if { $data(category2) eq $new_category } return
+	variable data
+	variable widgets
+#	if { $data(category2) eq $new_category } return
 		
 	set data(category2) {}
 	if { $new_category ne "" } {
-		lassign [::DYE::field_lookup $new_category "name_plural data_type"] name_plural data_type
-		if { $name_plural eq "" } {
+		lassign [::DYE::field_lookup $new_category "name data_type"] cat_name data_type
+		if { $cat_name eq "" } {
 			msg "DYE: ERROR on FSH::load_page, category2='$new_category' not found"
 			return
 		}
@@ -6034,10 +6073,12 @@ proc ::DYE::FSH::category2_change { new_category } {
 			return			
 		}
 		set data(category2) $new_category
-		set data(categories2_label) [translate $name_plural]
+		set data(categories2_label) [translate $cat_name]
+		update
 	}
-	
-	fill_categories2_listbox
+
+	after 300 ::DYE::GUI::relocate_text_wrt $widgets(categories2_label_dropdown) $widgets(categories2_label) e 12 -6 w	
+	fill_categories2_listbox	
 }
 
 proc ::DYE::FSH::fill_categories2_listbox {} {
@@ -6061,6 +6102,12 @@ proc ::DYE::FSH::reset_categories2_click {} {
 	$widgets(categories2) selection clear 0 end
 }
 
+proc ::DYE::FSH::select_category2_callback { category category_name type } {
+	variable data
+	set data(category2) $category		
+	page_to_show_when_off [namespace current]
+#	category2_change $category	
+}
 
 proc ::DYE::FSH::date_from_leave {} {
 	variable widgets
@@ -6125,8 +6172,9 @@ proc ::DYE::FSH::set_order_by { field } {
 
 proc ::DYE::FSH::reset_click {} {
 	variable data
-	variable widgets
+	variable widgets	
 	say [translate {reset}] $::settings(sound_button_in)
+	set page [namespace current]
 	
 	$widgets(categories1) selection clear 0 end
 	$widgets(categories2) selection clear 0 end
@@ -6137,9 +6185,9 @@ proc ::DYE::FSH::reset_click {} {
 	set data(ey_from) {}
 	set data(ey_to) {}
 	set data(enjoyment_from) {}
-	::DYE::GUI::draw_rating FSH enjoyment_from
+	::DYE::GUI::draw_rating $page -widget_name enjoyment_from
 	set data(enjoyment_to) {}
-	::DYE::GUI::draw_rating FSH enjoyment_to
+	::DYE::GUI::draw_rating $page -widget_name enjoyment_to
 	set_order_by date	
 	$widgets(shots) delete 0 end
 	set data(matched_shots) {}
