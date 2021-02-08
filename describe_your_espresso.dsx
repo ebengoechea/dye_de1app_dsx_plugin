@@ -43,20 +43,20 @@
 ### (with lots of copy/paste/tweak from Damian, John and Johanna's code!)
 ########################################################################################################################
 
-package provide describe_your_espresso.dsx 1.15
+package provide describe_your_espresso.dsx 1.17
 package require sqlite3
 package require http
 package require tls
 package require json
 package require zipfs
 
-variable version {1.15}
+variable version {1.17}
 
 ########################################################################################################################
 ### VARIABLES DECLARATIONS 
 
 namespace eval DYE {
-	variable plugin_version {1.15}
+	variable plugin_version {1.17}
 	variable plugin_file "describe_your_espresso.dsx"
 	variable db_version 4
 	variable min_DSx_version {4.39}
