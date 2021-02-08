@@ -60,7 +60,7 @@ namespace eval DYE {
 	variable plugin_file "describe_your_espresso.dsx"
 	variable db_version 4
 	variable min_DSx_version {4.39}
-	variable min_de1app_version {1.31}
+	variable min_de1app_version {1.34}
 	variable settings_path "[skin_directory]/DSx_User_Set/DYE_settings.tdb"
 	variable filename_clock_format "%Y%m%dT%H%M%S"
 	variable friendly_clock_format "%Y/%m/%d %H:%M"
@@ -228,7 +228,9 @@ proc ::DYE::check_settings {} {
 	ifexists settings(visualizer_endpoint) "api/shots/upload"
 	if { ![info exists settings(visualizer_username)] } { set settings(visualizer_username) {} }
 	if { ![info exists settings(visualizer_password)] } { set settings(visualizer_password) {} }
-	if { ![info exists settings(last_visualizer_result)] } { set settings(last_visualizer_result) {} } 
+	if { ![info exists settings(last_visualizer_result)] } { set settings(last_visualizer_result) {} }
+	ifexists settings(auto_upload_to_visualizer) 0
+	ifexists settings(min_seconds_visualizer_auto_upload) 6
 
 	if { ![info exists settings(last_sync_clock)] } {
 		set settings(last_sync_clock) 0
@@ -281,8 +283,22 @@ proc ::DYE::define_last_shot_desc { args } {
 proc ::DYE::save_espresso_to_history_hook { args } {
 	if { $::settings(history_saved) == 1 } {
 		msg "DYE: save_espresso_to_history_hook "
-		
+
 		::DYE::define_last_shot_desc
+		
+		if { $::DYE::settings(auto_upload_to_visualizer) == 1 && $::DYE::settings(visualizer_username) ne "" && 
+				$::DYE::settings(visualizer_password) ne "" } {
+			set bev_type [ifexists ::settings(beverage_type) "espresso"] 
+			if {[espresso_elapsed range end end] >= $::DYE::settings(min_seconds_visualizer_auto_upload) && 
+					$bev_type ne "cleaning" && $bev_type ne "calibrate"} {
+				set repo_link [::DYE::upload_to_visualizer_and_save $::settings(espresso_clock)]
+				if { $::settings(repository_links) eq "" } { 
+					set ::settings(repository_links) $repo_link
+				} elseif { $::settings(repository_links) ne $repo_link } {
+					lappend ::settings(repository_links) $repo_link
+				}
+			}
+		}
 		
 		if { $::DYE::settings(db_persist_desc) == 1 || $::DYE::settings(db_persist_series) == 1 } {
 			# We need the shot data in DYE::DB::persist_shot in an array that is a bit different from ::settings,
@@ -290,10 +306,11 @@ proc ::DYE::save_espresso_to_history_hook { args } {
 			# we miss the filename and the modification time, and we need to build some variables with a priority
 			# (like dose may come from DSx vars or from base vars). So, rather than replicate everything, we just read
 			# the just-written file, which is not highly efficient but it's very straightforward.
-			set fn "[homedir]/history/[clock format $::settings(espresso_clock) -format $::DYE::filename_clock_format].shot"
-			array set shot [::DYE::load_shot $fn]
+			#set fn "[homedir]/history/[clock format $::settings(espresso_clock) -format $::DYE::filename_clock_format].shot"
+			array set shot [::DYE::load_shot $::settings(espresso_clock)]
 			::DYE::DB::persist_shot shot $::DYE::settings(db_persist_desc) $::DYE::settings(db_persist_series) 1
 		}
+		
 	}
 }
 
@@ -849,6 +866,30 @@ proc ::DYE::visualizer_upload {content} {
 	return $uploaded_id
 }
 
+# Takes a shot (if the shot contents array is provided, use it, otherwise reads from disk from the filename parameter),
+# 	uploads it to visualizer, changes its repository_links settings if necessary, and persists the change to disk.
+# 'clock' can have any format supported by proc get_shot_file_path, though it is ignored if contents is provided.
+# Returns the repository link if successful, empty string otherwise
+proc ::DYE::upload_to_visualizer_and_save { clock { content {}} } {
+	if { $content eq "" } {
+		array set arr_changes {}
+		set content [::DYE::modify_shot_file $clock arr_changes 0 0]
+	} 
+	
+	set visualizer_id [::DYE::visualizer_upload $content]	
+	if { $visualizer_id ne "" } {
+		set repo_link "Visualizer https://visualizer.coffee/shots/$visualizer_id"
+		if { [string match "*$repo_link*" $content] != 1 } {
+			set arr_changes(repository_links) $repo_link
+			::DYE::modify_shot_file $clock arr_changes
+		}
+	} else {
+		set repo_link {}
+	}
+	
+	return $repo_link
+}
+
 # Queries GitHub repository for the latest released version and returns a 3-elements list 
 # 	{ <tag (version number)> <release_url> <release_description> }.
 # If there's an error or the data can't be donwloaded, returns {-1 {} <error_description> }
@@ -1040,6 +1081,7 @@ namespace eval DYE::GUI {
 	variable symbol_people "\uf500"
 	variable symbol_plug "\uf1e6"
 	variable symbol_cup "\uf0f4"
+	variable symbol_eye "\uf06e"
 	variable symbol_sort_down "\uf0dd"
 	variable symbol_file_upload "\uf574"
 	variable symbol_file_import "\uf56f"
@@ -2010,22 +2052,22 @@ proc ::DYE::GUI::add_text_entry { page field_name x_label y_label x_widget y_wid
 	
 	if { $has_ns } { set "${page}::widgets($widget_name)" $widget }
 	
-	if { $field_name ne "" } {
-		if { $data_type eq "category" } {
-			set w [add_de1_text $page [expr {$x_widget+300}] [expr {$y_widget-11}] -font fontawesome_reg_small \
-				-fill $::DSx_settings(font_colour) -anchor "nw" -justify "left" -text $DYE::GUI::symbol_sort_down ]
-			if { $has_ns } { set "${page}::widgets(${widget_name}_dropdown)" $w }
-						 		
-			set w [add_de1_button $page $dropdown_cmd [expr {$x_widget+295}] $y_widget \
-				[expr {$x_widget+360}] [expr {$y_widget+68}] ]
-			if { $has_ns } { set "${page}::widgets(${widget_name}_dropdown_button)" $w }
-		}
-		
-		
-		if { $data_type eq "numeric" && $editor_page == 1 && $field_name ne "" } {
-			set editor_cmd "if \{ \[$widget cget -state\] eq \"normal\" \} \{ ::DYE::NUME::load_page $field_name $textvariable \}" 
-			bind $widget <Double-Button-1> $editor_cmd
-		}
+	if { $data_type eq "category" && $field_name ne "" } {
+		set w [add_de1_text $page [expr {$x_widget+300}] [expr {$y_widget-11}] -font fontawesome_reg_small \
+			-fill $::DSx_settings(font_colour) -anchor "nw" -justify "left" -text $DYE::GUI::symbol_sort_down ]
+		if { $has_ns } { set "${page}::widgets(${widget_name}_dropdown)" $w }
+					 		
+		set w [add_de1_button $page $dropdown_cmd [expr {$x_widget+295}] $y_widget \
+			[expr {$x_widget+360}] [expr {$y_widget+68}] ]
+		if { $has_ns } { set "${page}::widgets(${widget_name}_dropdown_button)" $w }
+	}
+	
+	
+	if { $data_type eq "numeric" && $editor_page == 1 } {
+		set editor_cmd "if \{ \[$widget cget -state\] eq \"normal\" \} \{ ::DYE::NUME::load_page \"$field_name\" \
+			$textvariable -n_decimals $n_decimals -min_value $min_value -max_value $max_value \
+			-default_value $default_value -small_increment $small_increment -big_increment $big_increment \}"
+		bind $widget <Double-Button-1> $editor_cmd
 	}
 	
 	return $widget
@@ -3556,7 +3598,7 @@ proc ::DYE::DB::shots_using_category { field_name value {return_what clock} args
 		append sql "ORDER BY t.clock DESC"
 	}
 	
-msg "DYE DB DEBUG shots_using_category, sql=$sql"	
+#msg "DYE DB DEBUG shots_using_category, sql=$sql"	
 	if { [llength $return_what] == 1 } {
 		return [db eval "$sql"]
 	} else {
@@ -4882,17 +4924,20 @@ proc ::DYE::DE::calc_ey_from_tds  {} {
 }
 
 proc ::DYE::DE::upload_to_visualizer_click {} {
-	if { $::DYE::DE::data(repository_links) ne {} } {
-		say [translate "browsing"] $::settings(sound_button_in)
-		if { [llength $::DYE::DE::data(repository_links)] > 1 } {
-			::DYE::web_browser [lindex $::DYE::DE::data(repository_links) 1]
-		}
-		return
-	}
+	variable data
+	variable widgets
+
+#	if { $::DYE::DE::data(repository_links) ne {} } {
+#		say [translate "browsing"] $::settings(sound_button_in)
+#		if { [llength $::DYE::DE::data(repository_links)] > 1 } {
+#			::DYE::web_browser [lindex $::DYE::DE::data(repository_links) 1]
+#		}
+#		return
+#	}
 	
 	say "" $::settings(sound_button_in)
 	if { $::android == 1 && [borg networkinfo] eq "none" } {
-		set ::DYE::DE::data(upload_to_visualizer_label) [translate "Failed\rNo wifi"]
+		set data(upload_to_visualizer_label) [translate "Failed\rNo wifi"]
 		set ::DYE::settings(last_visualizer_result) "[translate {Upload failed}]: [translate {No wifi}]" 
 		.can itemconfig $::DYE::DE::widgets(upload_to_visualizer_label) -fill $::DSx_settings(orange)
 		update
@@ -4904,7 +4949,7 @@ proc ::DYE::DE::upload_to_visualizer_click {} {
 	# Ensure latest values are in the shot file in case they have changed
 	if { [::DYE::DE::needs_saving] } {
 		set answer [tk_messageBox -message "[translate {You have unsaved changes to the shot description.}]\r\
-			[translate {Do you want to save your changes first?}]" \
+[translate {Do you want to save your changes first?}]" \
 			-type yesnocancel -icon question]
 		if { $answer eq "yes" } { 
 			::DYE::DE::save_description
@@ -4913,23 +4958,24 @@ proc ::DYE::DE::upload_to_visualizer_click {} {
 		}
 	}
 		
-	set ::DYE::DE::data(upload_to_visualizer_label) [translate "Uploading..."]
-	.can itemconfig $::DYE::DE::widgets(upload_to_visualizer_label) -fill $::DSx_settings(orange)
+	set data(upload_to_visualizer_label) [translate "Uploading..."]
+	.can itemconfig $widgets(upload_to_visualizer_label) -fill $::DSx_settings(orange)
 	update
 	
-	array set arr_changes {}
-	set content [::DYE::modify_shot_file $::DYE::DE::data(shot_file) arr_changes 0 0]	
-	set visualizer_id [::DYE::visualizer_upload $content]
+	set repo_link [::DYE::upload_to_visualizer_and_save $::DYE::DE::data(clock)]
 	
-	if { $visualizer_id eq "" } {
-		set ::DYE::DE::data(upload_to_visualizer_label) [translate "Upload\rfailed"]
+	if { $repo_link eq "" } {
+		set data(upload_to_visualizer_label) [translate "Upload\rfailed"]
 		update
 		after 3000 ::DYE::DE::update_visualizer_button
 	} else {
-		set ::DYE::DE::data(upload_to_visualizer_label) [translate "Upload\rsuccessful"]
-		set ::DYE::DE::data(repository_links) "Visualizer https://visualizer.coffee/shots/$visualizer_id"
-		set arr_changes(repository_links) $::DYE::DE::data(repository_links)
-		::DYE::modify_shot_file $::DYE::DE::data(shot_file) arr_changes
+		set data(upload_to_visualizer_label) [translate "Upload\rsuccessful"]
+		if { $data(repository_links) eq "" } { 
+			set data(repository_links) $repo_link
+		} elseif { $data(repository_links) ne $repo_link } {
+			lappend data(repository_links) $repo_link
+		}
+		
 		update
 		after 3000 ::DYE::DE::update_visualizer_button
 	}
@@ -4949,12 +4995,15 @@ proc ::DYE::DE::update_visualizer_button { {check_context 1} } {
 			.can itemconfig $::DYE::DE::widgets(upload_to_visualizer$wn) -state normal
 		}
 		if { $::DYE::DE::data(repository_links) eq {} } {
-			.can itemconfig $::DYE::DE::widgets(upload_to_visualizer_symbol) -text $::DYE::GUI::symbol_file_upload
+			#.can itemconfig $::DYE::DE::widgets(upload_to_visualizer_symbol) -text $::DYE::GUI::symbol_file_upload
 			set ::DYE::DE::data(upload_to_visualizer_label) [translate "Upload to\rVisualizer"]
 		} else {
-			.can itemconfig $::DYE::DE::widgets(upload_to_visualizer_symbol) -text $::DYE::GUI::symbol_file_contract
-			set ::DYE::DE::data(upload_to_visualizer_label) [translate "See in\rVisualizer"]
+			set ::DYE::DE::data(upload_to_visualizer_label) [translate "Re-upload to\rVisualizer"]
 		}
+#		else {
+#			.can itemconfig $::DYE::DE::widgets(upload_to_visualizer_symbol) -text $::DYE::GUI::symbol_file_contract
+#			set ::DYE::DE::data(upload_to_visualizer_label) [translate "See in\rVisualizer"]
+#		}
 	} else {
 		foreach wn {_symbol _label _img ""} {
 			.can itemconfig $::DYE::DE::widgets(upload_to_visualizer$wn) -state hidden
@@ -5365,7 +5414,7 @@ proc ::DYE::NUME::load_page { field_name { num_variable {}} args } {
 	foreach fn $opt_names {
 		set data($fn) [ifexists opts(-$fn) [subst \$f_$fn]] 
 	}
-	if { $f_data_type ne "numeric" } {
+	if { $field_name ne "" && $f_data_type ne "numeric" } {
 		msg "DYE WARNING: field '$field_name' is not numeric, cannot launch page ::DYE::NUME"
 		return
 	}
@@ -5374,7 +5423,7 @@ proc ::DYE::NUME::load_page { field_name { num_variable {}} args } {
 	if { [info exists opts(-callback_cmd)] } {
 		set data(callback_cmd) $opts(-callback_cmd)
 	}	
-	set data(show_previous_values) [ifexists opts(-show_previous_values) 1]
+	set data(show_previous_values) [expr {[ifexists opts(-show_previous_values) 1] && $field_name ne ""}]
 	set data(num_variable) $num_variable
 	#if { $data(value) eq "" && $data(default_value) ne "" } { set data(value) $data(default_value) }
 	if { $data(small_increment) eq "" } { set data(small_increment) 1.0 }
@@ -7326,12 +7375,17 @@ namespace eval ::DYE::CFG {
 # Normally not usedas this is not invoked directly but by the DSx settings pages carousel, but still kept for 
 # consistency or for launching the page from a menu.
 proc ::DYE::CFG::load_page {} {
-	page_to_show_when_off [namespace current]
+	page_to_show_when_off [namespace current]	
 }
 
 # Added to context actions, so invoked automatically whenever the page is loaded
-proc ::DYE::CFG::show_page {} {	
-	::DYE::CFG::update_plugin_state	
+proc ::DYE::CFG::show_page {} {
+	variable widgets
+	::DYE::GUI::relocate_text_wrt $widgets(see_visualizer_pwd) $widgets(visualizer_password) e 10 0 w \
+		$widgets(see_visualizer_pwd_button)
+	$widgets(visualizer_password) configure -show "*"
+	auto_upload_to_visualizer_change
+	update_plugin_state	
 }
 
 # Setup the "DYE_configuration" page User Interface.
@@ -7343,12 +7397,12 @@ proc ::DYE::CFG::setup_ui {} {
 	::DYE::GUI::add_page $page -add_bg_img 0 -title "Describe Your Espresso Settings" \
 		-cancel_button 0 -done_button 0
 		
-	set y 200
+	set y 180
 	::DYE::GUI::add_text $page 600 $y [translate "General options"] -font [DSx_font font 10] 	-anchor "center" -justify "center" 	
 	::DYE::GUI::add_text $page 1900 $y [translate "Database"] -font [DSx_font font 10] -anchor "center" -justify "center"	
 	
 	# LEFT SIDE
-	set x_label 100; incr y 100
+	set x_label 100; incr y 70
 	::DYE::GUI::add_checkbox $page ::DYE::settings(show_shot_desc_on_home) $x_label $y \
 		::DYE::CFG::show_shot_desc_on_home_change -use_page_var 0 \
 		-widget_name show_shot_desc_on_home \
@@ -7378,7 +7432,7 @@ proc ::DYE::CFG::setup_ui {} {
 		-widget_name use_stars_to_rate_enjoyment \
 		-label [translate "Use 1-5 stars rating to evaluate enjoyment"]
 			
-	incr y 150
+	incr y 125
 	::DYE::GUI::add_button2 $page shot_desc_font_color $x_label $y [translate "Shots\rsummaries\rcolor"] \
 		"" paintbrush ::DYE::CFG::shot_desc_font_color_change -symbol_fill $::DYE::settings(shot_desc_font_color)
 	incr y [expr {$::DYE::GUI::button2_height+35}]
@@ -7387,26 +7441,46 @@ proc ::DYE::CFG::setup_ui {} {
 	::add_de1_button $page ::DYE::CFG::set_default_shot_desc_font_color $x_label [expr {$y-20}] \
 		[expr {$x_label+$::DYE::GUI::button2_width}] [expr {$y+50}]
 	
-	set x_widget 470; incr y 125
-	::DYE::GUI::add_text_entry $page {} $x_label $y $x_widget $y 30 -widget_name visualizer_username \
+	# Visualizer
+	set x_widget 470; incr y 110
+	::DYE::GUI::add_text_entry $page "" $x_label $y $x_widget $y 30 -widget_name visualizer_username \
 		-label [translate "Visualizer username"] -textvariable ::DYE::settings(visualizer_username)
 	bind $widgets(visualizer_username) <Leave> {
 		set ::DYE::settings(visualizer_username) [string trim $::DYE::settings(visualizer_username)]
-		::DYE::save_settings }
+		::DYE::save_settings }	
 	
 	incr y 80
 	::DYE::GUI::add_text_entry $page {} $x_label $y $x_widget $y 30 -widget_name visualizer_password \
-		-label [translate "Visualizer password"] -textvariable ::DYE::settings(visualizer_password)
+		-label [translate "Visualizer password"] -textvariable ::DYE::settings(visualizer_password) -show *
 	bind $widgets(visualizer_password) <Leave> { 
 		set ::DYE::settings(visualizer_password) [string trim $::DYE::settings(visualizer_password)]
 		::DYE::save_settings }	
-
+	::DYE::GUI::add_symbol $page [expr {$x_widget+300}] $y eye -widget_name see_visualizer_pwd \
+		-has_button 1 -button_cmd ::DYE::CFG::show_or_hide_visualizer_pwd
+	
+	incr y 80
+	::DYE::GUI::add_checkbox $page ::DYE::settings(auto_upload_to_visualizer) $x_label $y \
+		::DYE::CFG::auto_upload_to_visualizer_change -use_page_var 0 \
+		-widget_name auto_upload_to_visualizer \
+		-label [translate "Auto-upload finished shots to Visualizer (except cleaning/calibrate)"]
+	
+	incr y 80
+	::DYE::GUI::add_text_entry $page {} [expr {$x_label+140}] $y [expr {$x_label+70}] $y 2 \
+		-widget_name min_seconds_visualizer_auto_upload \
+		-label [translate "Minimum shot seconds to auto-upload to Visualizer"] \
+		-textvariable ::DYE::settings(min_seconds_visualizer_auto_upload) -data_type numeric -n_decimals 0 \
+		-min_value 0 -max_value 20 -default_value 6 -small_increment 1 -big_increment 1 
+#	bind $widgets(min_seconds_visualizer_auto_upload) <Leave> { 
+#		set ::DYE::settings(visualizer_password) [string trim $::DYE::settings(visualizer_password)]
+#		::DYE::save_settings }	
+	
 	incr y 100
 	::DYE::GUI::add_text $page $x_label $y [translate "Visualizer last result"]
-	::DYE::GUI::add_variable $page $x_widget $y {$::DYE::settings(last_visualizer_result)} -width 1000
+	::DYE::GUI::add_variable $page $x_widget $y {$::DYE::settings(last_visualizer_result)} -width 1000 \
+		-fill $::DYE::GUI::default_shot_desc_font_color
 	
 	# RIGHT SIDE
-	set x_label 1600; set y 300
+	set x_label 1600; set y 250
 	::DYE::GUI::add_checkbox $page ::DYE::settings(db_persist_series) $x_label $y \
 		::DYE::CFG::db_persist_series_change -use_page_var 0 \
 		-widget_name db_persist_series \
@@ -7522,6 +7596,22 @@ proc ::DYE::CFG::set_default_shot_desc_font_color {} {
 	
 	set ::DYE::settings(shot_desc_font_color) $colour
 	::DYE::save_settings
+}
+
+proc ::DYE::CFG::show_or_hide_visualizer_pwd {} {
+	variable widgets
+	
+	if { [$widgets(visualizer_password) cget -show] eq "*" } {
+		$widgets(visualizer_password) configure -show ""
+	} else {
+		$widgets(visualizer_password) configure -show "*"
+	}
+}
+
+
+proc ::DYE::CFG::auto_upload_to_visualizer_change {} {
+	::DYE::GUI::enable_or_disable_widgets $::DYE::settings(auto_upload_to_visualizer) \
+		"min_seconds_visualizer_auto_upload*" [namespace current]
 }
 
 proc ::DYE::CFG::db_persist_series_change {} {

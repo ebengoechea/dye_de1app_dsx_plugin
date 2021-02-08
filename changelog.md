@@ -10,10 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [1.17] - 2021-02-?
 
 ### Added
+- Enable Visualizer auto-upload. "Upload to Visualizer" button on the main DYE page now toggles to 
+"Re-Upload to Visualizer" instead of "See in Visualizer". New settings "auto_upload_to_visualizer" (default 0)
+and "min_seconds_visualizer_auto_upload" (default 6), which can be set from the DYE Settings page.
+Requested from @Miha Rehar, @TMC and @Jakub Olesky.
+- Visualizer password is now hidden by default, this can be changed tapping the "eye" icon on its right.
 - The 2 search criteria category listboxes in the Filter Shot History page now can be redefined by the user.
 - New proc ::DYE::GUI::relocate_widget_wrt to help placing widgets relative to one another.
 
 ### Changed
+- DE1app minimum required version increased to 1.34 (to ensure than "beverage_type" is defined).
 - Listboxes default selectmode changed from "single" to "browse".
 - On FSH page, the [Reset] buttons are now aligned dinamically using relocate_widget_wrt.
 
