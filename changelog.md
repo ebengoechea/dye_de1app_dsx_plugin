@@ -1,13 +1,19 @@
 # Changelog - "Describe Your Espresso" Decent DE1 DSx plugin
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 - New DB Schema version 5.
 - New page "Other equipment". New user-defined field "other_equipement". New DB tables "shot_equipment", "equipment" & "equipment_type".
 - New page "Modify category", which shows exactly which shots will be modified and allows the user to backup modified files and modify only a subset of files. Also shows progress information.
 
-## [1.17] - 2021-02-?
+## [1.18] - 2021-02-?
+
+### Added
+
+### Changed
+
+## [1.17] - 2021-02-08
 
 ### Added
 - Enable Visualizer auto-upload. "Upload to Visualizer" button on the main DYE page now toggles to 
