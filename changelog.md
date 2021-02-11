@@ -10,6 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [1.18] - 2021-02-?
 
 ### Added
+- Completed the parametrization of the aspect. Now a different set of backgrounds, fonts, and colors can be defined
+per skin/theme. All images used in buttons have been replaced by Fontawesome icons or canvas items.
 
 ### Changed
 
