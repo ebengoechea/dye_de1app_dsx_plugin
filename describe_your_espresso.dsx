@@ -68,11 +68,7 @@ namespace eval DYE {
 	
 	variable settings
 	array set settings {}
-
-	# Store widgets used in the skin-specific GUI integration 
-	variable widgets
-	array set widgets {}
-	
+		
 	# DATA DICTIONARY CONVENTIONS:
 	#  * The column name in the shot table or the lookup table must be identical to the array item key.
 	#  * The shot_field is the variable name in the shot file, settings section. May not match the array item key in 
@@ -155,10 +151,7 @@ proc ::DYE::main {} {
 	check_settings
 	DB::init
 	GUI::setup_aspect
-	foreach ns {DE IS NUME FSH CFG SEQ MODC MENU TXT} { ::DYE::${ns}::setup_ui }
-	if { [namespace which -command "::DYE::setup_ui_$::settings(skin)"] ne "" } {
-		::DYE::setup_ui_$::settings(skin)
-	}
+	foreach ns {DE IS NUME FSH CFG SEQ MODC MENU TXT GUI} { ::DYE::${ns}::setup_ui }	
 	save_settings
 	
 	if { [ifexists ::debugging 0] == 1 && $::android != 1 } {
@@ -168,21 +161,17 @@ proc ::DYE::main {} {
 }
  
 # Verify the minimum required versions of DE1 app & DSx skin are used, otherwise prevents startup.
-proc ::DYE::check_versions {} {
+proc ::DYE::check_versions {} {	
+	if { [package vcompare $::DSx_settings(version) $::DYE::min_DSx_version] < 0 } {
+		message_page "[translate {Plugin 'Describe Your Espreso'}] v$::DYE::plugin_version [translate requires]\
+DSx v$::DYE::min_DSx_version [translate {or higher}]\r\r[translate {Current DSx version is}] $::DSx_settings(version)" \
+		[translate Ok]
+	}
 	if { [package vcompare [package version de1app] $::DYE::min_de1app_version] < 0 } {
 		message_page "[translate {Plugin 'Describe Your Espreso'}] v$::DYE::plugin_version [translate requires] \
 DE1app v$::DYE::min_de1app_version [translate {or higher}]\r\r[translate {Current DE1app version is}] [package version de1app]" \
 		[translate Ok]
 	}	
-	
-	if { [info exists ::DYE::min_$::settings(skin)_version ] } {
-		# TODO: Make a proc that properly returns the skin version
-		if { [package vcompare $::DSx_settings(version) [subst \$::DYE::min_$::settings(skin)_version]] < 0 } {
-			message_page "[translate {Plugin 'Describe Your Espreso'}] v$::DYE::plugin_version [translate requires]\
-$::settings(sking) skin v[subst \$::DYE::min_$::settings(skin)_version] [translate {or higher}]\r\r[translate {Current $::settings(sking) version is}] $::DSx_settings(version)" \
-			[translate Ok]
-		}
-	}
 }
 
 # Loads settings from DYE::settings.tbd file.
@@ -271,160 +260,6 @@ espresso_notes my_name drinker_name scentone skin beverage_type final_desired_sh
 proc ::DYE::save_settings {} {
 	msg "DYE: saving Describe Your Espresso settings"
 	::save_DSx_array_to_file DYE::settings $DYE::settings_path
-}
-
-# Setup the UI integration with the DSx skin. This should go in a separated conditionally sourced file in the future
-proc ::DYE::setup_ui_DSx {} {
-	variable widgets 
-	
-	### DE1APP SPLASH PAGE ###
-	#	add_de1_variable "splash" 1280 1200 -justify center -anchor "center" -font [::DYE::GUI::get_font $::DYE::GUI::font 12] \
-	#		-fill $::DYE::settings(orange) -textvariable {$::DYE::GUI::db_progress_msg}
-	
-	### DSx HOME PAGE ###
-	# Shortcuts menu (EXPERIMENTAL)
-	if { [info exists ::debugging] && $::debugging == 1 } {
-		::DYE::GUI::add_symbol $::DSx_standby_pages 100 60 bars size small -has_button 1 \
-			-button_cmd ::DYE::MENU::load_page
-	#		add_de1_text "$::DSx_standby_pages" 100 60 -font fontawesome_reg_small -fill $::DYE::GUI::font_color \
-	#			-anchor "nw" -text $::DYE::GUI::symbol_bars
-	#		::add_de1_button "$::DSx_standby_pages" { ::DYE::MENU::load_page } 70 40 175 150
-	}
-	
-	# Icon and summary of next shot description below the profile & specs for next shot (left side)
-	set x [lindex $::DYE::settings(next_shot_DSx_home_coords) 0]
-	set y [lindex $::DYE::settings(next_shot_DSx_home_coords) 1]
-	if { $x > 0 && $y > 0 } {
-		::DYE::GUI::add_symbol $::DSx_standby_pages [expr {$x-360}] [expr {$y-35}] $::DYE::settings(describe_icon) \
-			-size small
-		set ::DYE::next_shot_desc [::DYE::define_next_shot_desc]
-		set widgets(DSx_home_next_shot_desc) [add_de1_variable "$::DSx_standby_pages" $x $y -justify center \
-			-anchor "center" -font [::DYE::GUI::get_font $::DYE::GUI::font 6] -fill $::DYE::settings(shot_desc_font_color) \
-			-width [rescale_x_skin 500] -textvariable {$::DYE::next_shot_desc} ] 
-		add_de1_button "$::DSx_standby_pages" { ::DYE::DE::load_page next } [expr {$x-400}] [expr {$y-75}] \
-			[expr {$x+250}] [expr {$y+75}]
-	}
-	
-	# Icon and summary of the current (last) shot description below the shot chart and steam chart (right side)
-	set x [lindex $::DYE::settings(last_shot_DSx_home_coords) 0]
-	set y [lindex $::DYE::settings(last_shot_DSx_home_coords) 1]
-	if { $x > 0 && $y > 0 } {
-		::DYE::GUI::add_symbol $::DSx_standby_pages [expr {$x+300}] [expr {$y-35}] $::DYE::settings(describe_icon) \
-			-size small		
-		set ::DYE::last_shot_desc [::DYE::define_last_shot_desc]
-		set widgets(DSx_home_last_shot_desc) [add_de1_variable "$::DSx_standby_pages" $x $y -justify center \
-			-anchor "center" -font [::DYE::GUI::get_font $::DYE::GUI::font 6] -fill $::DYE::settings(shot_desc_font_color) \
-			-width [rescale_x_skin 500] -textvariable {$::DYE::last_shot_desc} ]
-		add_de1_button "$::DSx_standby_pages" { 
-			if { $::settings(history_saved) == 1 && [info exists ::DSx_settings(live_graph_time)] } {
-				::DYE::DE::load_page current
-			} 		
-			} [expr {$x-300}] [expr {$y-75}] [expr {$x+400}] [expr {$y+75}]
-	}
-	
-	# Update the describe settings to the "next" ones when the a shot is started 
-	trace add execution ::reset_gui_starting_espresso enter ::DYE::DE::reset_gui_starting_espresso_enter_hook
-	trace add execution ::reset_gui_starting_espresso leave ::DYE::DE::reset_gui_starting_espresso_leave_hook
-	
-	### HISTORY VIEWER PAGE ###
-	# Show espresso summary description (beans, grind, TDS, EY and enjoyment), and make it clickable to show to full
-	# espresso description.
-	set widgets(DSx_past_shot_desc) [add_de1_variable "DSx_past" 40 850 -text "" \
-		-font [::DYE::GUI::get_font $::DYE::GUI::font 7] -fill $::DYE::settings(shot_desc_font_color) \
-		-anchor "nw" -justify left -width [rescale_x_skin 1100] \
-		-textvariable {$::DYE::past_shot_desc} ]
-	add_de1_button "DSx_past" { 
-			if { [ifexists ::DSx_settings(past_shot_file) ""] ne "" } { ::DYE::DE::load_page past }	
-		} 40 850 1125 975
-		
-	set widgets(DSx_past_shot_desc2) [add_de1_variable "DSx_past" 1300 850 -text "" \
-		-font [::DYE::GUI::get_font $::DYE::GUI::font 7] -fill $::DYE::settings(shot_desc_font_color) \
-		-anchor "nw" -justify left -width [rescale_x_skin 1100] -textvariable {$::DYE::past_shot_desc2}]
-	add_de1_button "DSx_past" { 
-		if { [ifexists ::DSx_settings(past_shot_file2) ""] ne "" } { ::DYE::DE::load_page past2 }
-		} 1300 850 2400 975
-	
-	# Update left and right side shot descriptions when they change
-	trace add execution ::load_DSx_past_shot {leave} { ::DYE::define_past_shot_desc }
-	trace add execution ::load_DSx_past2_shot {leave} { ::DYE::define_past_shot_desc2 }
-	trace add execution ::clear_graph {leave} { ::DYE::define_past_shot_desc2 }	
-	
-	# Search/filter button for left side
-	add_de1_image "DSx_past" 935 1390 "[skin_directory_graphics]/icons/store_button.png"
-	add_de1_text "DSx_past" 977 1473 -font fontawesome_reg_small \
-		-fill $::DSx_settings(font_colour) -anchor "nw" -text $::DYE::GUI::symbol_filter
-	add_de1_variable "DSx_past" 1066 1495 -font [::DYE::GUI::get_font $::DYE::GUI::font 7] \
-		-fill $::DYE::GUI::font_color -anchor "center" \
-		-justify "center" -textvariable {$::DYE::FSH::data(left_filter_status)} 
-	add_de1_button "DSx_past" { 
-		if { $::DYE::FSH::data(left_filter_status) eq "on" } {
-			set ::DYE::FSH::data(left_filter_status) "off"
-			unset -nocomplain ::DSx_filtered_past_shot_files
-			fill_DSx_past_shots_listbox
-		} else {
-			::DYE::FSH::load_page
-		}
-		} 935 1400 1120 1575
-	
-	# Search/filter button for right side
-	add_de1_image "DSx_past" 1435 1390 "[skin_directory_graphics]/icons/store_button.png"
-	add_de1_text "DSx_past" 1477 1473 -font fontawesome_reg_small \
-		-fill $::DYE::GUI::font_color -anchor "nw" -text $::DYE::GUI::symbol_filter
-	add_de1_variable "DSx_past" 1566 1495 -font [::DYE::GUI::get_font $::DYE::GUI::font 7] \
-		-fill $::DSx_settings(font_colour) -anchor "center" \
-		-justify "center" -textvariable {$::DYE::FSH::data(right_filter_status)}
-	add_de1_button "DSx_past" { 
-		if { $::DYE::FSH::data(right_filter_status) eq "on" } {
-			set ::DYE::FSH::data(right_filter_status) "off"
-			unset -nocomplain ::DSx_filtered_past_shot_files2
-			fill_DSx_past2_shots_listbox
-		} else {
-			::DYE::FSH::load_page 
-		}
-		} 1435 1400 1620 1575
-	
-	### FULL PAGE CHARTS FROM HISTORY VIEWER ###
-	set widgets(DSx_past_zoomed_shot_desc) [add_de1_variable "DSx_past_zoomed" 1280 1535 \
-		-font [::DYE::GUI::get_font $::DYE::GUI::font 7] -fill $::DYE::settings(shot_desc_font_color) \
-		-anchor "center" -justify center -width [rescale_x_skin 2200] \
-		-textvariable {$::DYE::past_shot_desc_one_line}]
-	set widgets(DSx_past_zoomed_shot_desc2) [add_de1_variable "DSx_past2_zoomed" 1280 1535 \
-		-font [::DYE::GUI::get_font $::DYE::GUI::font 7] -fill $::DYE::settings(shot_desc_font_color) \
-		-anchor "center" -justify center -width [rescale_x_skin 2200] \
-		-textvariable {$::DYE::past_shot_desc_one_line2}]
-	trace add execution ::history_godshots_switch leave ::DYE::DE::history_godshots_switch_leave_hook
-	
-	### SCREENSAVER ###
-	# Makes the left side of the app screensaver clickable so that you can describe your last shot without waking up 
-	# the DE1. Note that this would overlap with the DSx plugin management option, if enabled. Provided by Damian.
-	if { $::DYE::settings(describe_from_sleep) == 1} {
-		set sleep_describe_symbol $::DYE::settings(describe_icon)
-		set sleep_describe_button_coords {230 0 460 230}
-	} else { 
-		set sleep_describe_symbol ""
-		set sleep_describe_button_coords {0 0 0 0}
-	}
-	set widgets(describe_from_sleep_symbol) [add_de1_text "saver" 275 35 -font fontawesome_reg_big \
-		-fill $::DYE::GUI::font_color -anchor "nw" -text $sleep_describe_symbol]	
-	set widgets(describe_from_sleep_button) [add_de1_button "saver" { ::DYE::DE::load_page current 1 } \
-		{*}$sleep_describe_button_coords]
-	
-	### DEBUG TEXT IN SOME PAGES ###
-	# Show the debug text variable. Set it to any value I want to see on screen at the moment.
-	if { $::DSx_skindebug == 1 } {
-		add_de1_variable "$::DYE::GUI::pages DSx_past $::DSx_standby_pages" \
-			20 20 -font [::DYE::GUI::get_font $::DYE::GUI::font 7] -fill $::DYE::GUI::remark_color \
-			-anchor "nw" -textvariable {$::DYE::debug_text}
-		#-textvariable {enjoyment=$::DYE::DE::data(espresso_enjoyment)}
-		
-		# Debug button/text to do some debugging action (current to go straight to the ::DYE::DE page)
-		# TODO This is not working. Console hides in background as soon as focus is given to anything, and cannot
-		#	get it back.
-		#add_de1_text "$::DSx_home_pages" 2300 225 -font [::DYE::GUI::get_font $::DYE::GUI::font 7] -fill $::DSx_settings(orange) -anchor "nw" \
-		#	-text "CONSOLE"
-		#add_de1_button "$::DSx_standby_pages" { catch { console hide } \
-		# 	console show; set DYE_window {[focus -displayof .can]} } 2250 220 2500 280		
-	}	
 }
 
 # Returns a string with the summary description of the current (last) shot.
@@ -735,7 +570,7 @@ proc ::DYE::modify_shot_file { path arr_new_settings { backup_file {} } { write_
 					msg "DYE: new_settings($key)='$new_settings($key)' malformed or other_equipment doesn't exist, when modifying shot file '[file tail $path]'"
 					continue
 				}
-			} elseif { $key eq "~equipment_setting" } { 
+			} elseif { $key eq "~equipment_settting" } { 
 				if { [llength $new_settings($key)] == 4 && [info exists past_sets(other_equipment)] } {
 					#set old_value $past_sets(other_equipment)
 					set new_settings(other_equipment) [modify_other_equipment $past_sets(other_equipment) [string range $key 1 9999] \
@@ -1213,10 +1048,7 @@ namespace eval DYE::GUI {
 	# Use the GUI widgets array to store the references to widgets created by DYE in non-DYE pages (for skin integration) 
 	variable widgets
 	array set widgets {}
-	
-	# Use this instead of $::settings(skin) while developing without having to manually change to the target skin
-	variable skin "Insight"
-	
+		
 	variable page_bg_image {}
 	# button 1 is medium-size button for done/cancel actions
 	variable button1_img {}
@@ -1230,10 +1062,7 @@ namespace eval DYE::GUI {
 	variable button3_img {}
 	variable button3_width 0
 	variable button3_height 0
-	variable button_font "font"
-	variable button_font_fill "#ffffff"
-	variable button_fill "#c0c5e3"
-					
+			
 	variable bg_color {}
 	variable font_color {}
 	variable default_shot_desc_font_color {#206ad4}
@@ -1246,30 +1075,7 @@ namespace eval DYE::GUI {
 	
 	variable font {}
 	variable font_size 7
-	variable header_font "font"	
 	variable header_font_size 11
-	variable section_font_size 10
-	variable button_font "font"
-	variable button_font_fill "#ffffff"
-	variable button_fill white
-	variable entry_relief sunken
-	
-	variable listbox_relief sunken
-	variable listbox_bwidth 1
-	variable listbox_fg "#ffffff"
-	variable listbox_sfg ""
-	variable listbox_bg ""
-	variable listbox_sbg "#ffffff"
-	variable listbox_sbwidth 1
-	variable listbox_hthickness 1
-	variable listbox_hcolor "#ffffff"
-	
-	variable scrollbar_bwidth 0
-	variable scrollbar_relief flat		
-	variable scrollbar_bg $font_color
-	variable scrollbar_fg "#FFFFFF"
-	variable scrollbar_troughcolor $bg_color
-	variable scrollbar_hthickness 0
 	
 	variable symbol_filter "\uf0b0"
 	variable symbol_people "\uf500"
@@ -1315,7 +1121,6 @@ namespace eval DYE::GUI {
 
 # Setup the general aspect parameters (colors, fonts etc.) depending on the skin used.
 proc ::DYE::GUI::setup_aspect { } {
-	# TODO: 
 	load_font fontawesome_reg_big "[homedir]/fonts/Font Awesome 5 Pro-Regular-400.otf" 55
 	load_font fontawesome_reg_medium "[homedir]/fonts/Font Awesome 5 Pro-Regular-400.otf" 40
 	load_font fontawesome_reg_small "[homedir]/fonts/Font Awesome 5 Pro-Regular-400.otf" 24
@@ -1326,10 +1131,11 @@ proc ::DYE::GUI::setup_aspect { } {
 #	set ::DYE::GUI::fontawesome_solid_small [DSx_load_font fontawesome_solid_small "$::DSx_settings(font_dir)/Font Awesome 5 Pro-Solid-900.oft" 24]	
 	#load_font fontawesome_solid_small "[homedir]/fonts/Font Awesome 5 Pro-Solid-900.otf" 24
 	
-	if { $::DYE::GUI::skin eq "DSx" } {
+	
+	if { $::settings(skin) eq "DSx" } {
 		variable page_bg_image "[skin_directory_graphics]/background/$::DSx_settings(bg_name)"
-#		variable button1_img "[skin_directory_graphics]/icons/button4.png"
-#		variable button2_img "[skin_directory_graphics]/icons/button8.png"
+		variable button1_img "[skin_directory_graphics]/icons/button4.png"
+		variable button2_img "[skin_directory_graphics]/icons/button8.png"
 		variable button3_img "[skin_directory_graphics]/icons/store_button.png"
 		variable bg_color $::DSx_settings(bg_colour)
 		variable font_color $::DSx_settings(font_colour)
@@ -1339,84 +1145,163 @@ proc ::DYE::GUI::setup_aspect { } {
 		variable disabled_color "#535353"
 		variable highlight_color $::DSx_settings(font_colour)
 		variable insert_bg_color $::DSx_settings(orange)
-		variable font "font"
-		variable font_size 7
-		variable header_font "font"
-		variable header_font_size 11
-		variable section_font_size 10
-		variable button_font "font"
-		variable button_font_fill $::DSx_settings(font_colour)
-		variable button_fill white
-		variable entry_relief sunken
-		
-		variable listbox_relief sunken
-		variable listbox_bwidth 1
-		variable listbox_fg $::DSx_settings(font_colour)
-		variable listbox_sfg $::DSx_settings(bg_colour)
-		variable listbox_bg $::DSx_settings(bg_colour)
-		variable listbox_sbg $::DSx_settings(font_colour)
-		variable listbox_sbwidth 1
-		variable listbox_hthickness 1
-		variable listbox_hcolor $::DSx_settings(font_colour)
-		
-		variable scrollbar_bwidth 0
-		variable scrollbar_relief flat		
-		variable scrollbar_bg $font_color
-		variable scrollbar_fg "#FFFFFF"
-		variable scrollbar_troughcolor $bg_color
-		variable scrollbar_hthickness 0
-	} elseif { $::DYE::GUI::skin eq "Insight" } {
-		# From skins/Insight/skin.tcl
-#		set green_button_font "Helv_18_bold"
-#		set label_font "Helv_10_bold"
-#		set listbox_font "Helv_10"
-		
-		variable page_bg_image "[skin_directory]/DSx_Plugins/bg_Insight.jpg"
-#		variable button1_img "[skin_directory_graphics]/icons/button4.png"
-#		variable button2_img "[skin_directory_graphics]/icons/button8.png"
-#		variable button3_img "[skin_directory_graphics]/icons/store_button.png"
-		# White # "#ffffff"  light grey "#ededfa"
-		variable bg_color "#ffffff"
-		variable font_color "#7f879a"
-		variable page_title_color "#7f879a"
-		variable remark_color orange
-		variable error_color red
-		variable disabled_color "#ddd"
-		variable highlight_color $font_color
-		variable insert_bg_color orange
-		variable font "Helv"
-		variable font_size 7
-		variable header_font "Helv_bold"
-		variable header_font_size 11
-		variable section_font_size 10
-		variable button_font "Helv_bold"
-		variable button_font_fill "#ffffff"
-		variable button_fill "#c0c5e3"
-		variable entry_relief flat
-		
-		variable listbox_relief flat
-		variable listbox_bwidth 0
-		variable listbox_fg $font_color
-		variable listbox_sfg black
-		variable listbox_bg $bg_color
-		variable listbox_sbg "#c0c4e1"
-		variable listbox_sbwidth 0
-		variable listbox_hthickness 1
-		variable listbox_hcolor $font_color
-
-		variable scrollbar_bwidth 0
-		variable scrollbar_relief flat		
-		variable scrollbar_bg "#d3dbf3"
-		variable scrollbar_fg "#FFFFFF"
-		variable scrollbar_troughcolor "#f7f6fa"
-		variable scrollbar_hthickness 0
+		#variable text_font $font
+		variable text_font_size 7
+		variable page_title_size 11
 	} else {
-		message_page [translate "Skin $::DYE::GUI::skin not supported to run the Describe Your Espresso plugin"] "Ok"
+		message_page [translate "DSx skin is required to run the Describe Your Espresso plugin"] "Ok"
 	}
 }
+	
+# Setup the plugin User Interface integration with other DSx pages.
+proc ::DYE::GUI::setup_ui { } {
+	variable widgets 
+	
+	### DE1APP SPLASH PAGE ###
+#	add_de1_variable "splash" 1280 1200 -justify center -anchor "center" -font [DSx_font font 12] \
+#		-fill $::DYE::settings(orange) -textvariable {$::DYE::GUI::db_progress_msg}
 
-# Call this on the page "load_page" namespace proc, before the actual page_show call, to store the page from which
-# the new one was called.
+	### DSx HOME PAGE ###
+	# Shortcuts menu (EXPERIMENTAL)
+	if { [info exists ::debugging] && $::debugging == 1 } {
+		add_de1_text "$::DSx_standby_pages" 100 60 -font fontawesome_reg_small -fill $::DYE::GUI::font_color \
+			-anchor "nw" -text $::DYE::GUI::symbol_bars
+		add_de1_button "$::DSx_standby_pages" { ::DYE::MENU::load_page } 70 40 175 150
+	}
+	
+	# Icon and summary of next shot description below the profile & specs for next shot (left side)
+	set x [lindex $::DYE::settings(next_shot_DSx_home_coords) 0]
+	set y [lindex $::DYE::settings(next_shot_DSx_home_coords) 1]
+	if { $x > 0 && $y > 0 } {
+		add_de1_text "$::DSx_standby_pages" [expr {$x-360}] [expr {$y-35}] -font fontawesome_reg_small \
+			-fill $::DYE::GUI::font_color -anchor "nw" -text $::DYE::settings(describe_icon)
+		set ::DYE::next_shot_desc [::DYE::define_next_shot_desc]
+		set widgets(DSx_home_next_shot_desc) [add_de1_variable "$::DSx_standby_pages" $x $y -justify center \
+			-anchor "center" -font [DSx_font font 6] -fill $::DYE::settings(shot_desc_font_color) \
+			-width [rescale_x_skin 500] -textvariable {$::DYE::next_shot_desc} ] 
+		add_de1_button "$::DSx_standby_pages" { ::DYE::DE::load_page next } [expr {$x-400}] [expr {$y-75}] \
+			[expr {$x+250}] [expr {$y+75}]
+	}
+	
+	# Icon and summary of the current (last) shot description below the shot chart and steam chart (right side)
+	set x [lindex $::DYE::settings(last_shot_DSx_home_coords) 0]
+	set y [lindex $::DYE::settings(last_shot_DSx_home_coords) 1]
+	if { $x > 0 && $y > 0 } {
+		add_de1_text "$::DSx_standby_pages" [expr {$x+300}] [expr {$y-35}] -font fontawesome_reg_small \
+			-fill $::DSx_settings(font_colour) -anchor "nw" -text $::DYE::settings(describe_icon)
+		set ::DYE::last_shot_desc [::DYE::define_last_shot_desc]
+		set widgets(DSx_home_last_shot_desc) [add_de1_variable "$::DSx_standby_pages" $x $y -justify center \
+			-anchor "center" -font [DSx_font font 6] -fill $::DYE::settings(shot_desc_font_color) \
+			-width [rescale_x_skin 500] -textvariable {$::DYE::last_shot_desc} ]
+		add_de1_button "$::DSx_standby_pages" { 
+			if { $::settings(history_saved) == 1 && [info exists ::DSx_settings(live_graph_time)] } {
+				::DYE::DE::load_page current
+			} 		
+			} [expr {$x-300}] [expr {$y-75}] [expr {$x+400}] [expr {$y+75}]
+	}
+	
+	# Update the describe settings to the "next" ones when the a shot is started 
+	trace add execution ::reset_gui_starting_espresso enter ::DYE::DE::reset_gui_starting_espresso_enter_hook
+	trace add execution ::reset_gui_starting_espresso leave ::DYE::DE::reset_gui_starting_espresso_leave_hook
+	
+	### HISTORY VIEWER PAGE ###
+	# Show espresso summary description (beans, grind, TDS, EY and enjoyment), and make it clickable to show to full
+	# espresso description.
+	set widgets(DSx_past_shot_desc) [add_de1_variable "DSx_past" 40 850 -text "" -font [DSx_font font 7] \
+		-fill $::DYE::settings(shot_desc_font_color) -anchor "nw" -justify left -width [rescale_x_skin 1100] \
+		-textvariable {$::DYE::past_shot_desc} ]
+	add_de1_button "DSx_past" { 
+		if { [ifexists ::DSx_settings(past_shot_file) ""] ne "" } { ::DYE::DE::load_page past } 		
+		} 40 850 1125 975
+		
+	set widgets(DSx_past_shot_desc2) [add_de1_variable "DSx_past" 1300 850 -text "" -font [DSx_font font 7] \
+		-fill $::DYE::settings(shot_desc_font_color) -anchor "nw" -justify left -width [rescale_x_skin 1100] \
+		-textvariable {$::DYE::past_shot_desc2}]
+	add_de1_button "DSx_past" { 
+		if { [ifexists ::DSx_settings(past_shot_file2) ""] ne "" } { ::DYE::DE::load_page past2 }
+		} 1300 850 2400 975
+
+	# Update left and right side shot descriptions when they change
+	trace add execution ::load_DSx_past_shot {leave} { ::DYE::define_past_shot_desc }
+	trace add execution ::load_DSx_past2_shot {leave} { ::DYE::define_past_shot_desc2 }
+	trace add execution ::clear_graph {leave} { ::DYE::define_past_shot_desc2 }	
+	
+	# Search/filter button for left side
+	add_de1_image "DSx_past" 935 1390 "[skin_directory_graphics]/icons/store_button.png"
+	add_de1_text "DSx_past" 977 1473 -font fontawesome_reg_small \
+		-fill $::DSx_settings(font_colour) -anchor "nw" -text $::DYE::GUI::symbol_filter
+	add_de1_variable "DSx_past" 1066 1495 -font [DSx_font font 7] -fill $::DSx_settings(font_colour) -anchor "center" \
+		-justify "center" -textvariable {$::DYE::FSH::data(left_filter_status)} 
+	add_de1_button "DSx_past" { 
+		if { $::DYE::FSH::data(left_filter_status) eq "on" } {
+			set ::DYE::FSH::data(left_filter_status) "off"
+			unset -nocomplain ::DSx_filtered_past_shot_files
+			fill_DSx_past_shots_listbox
+		} else {
+			::DYE::FSH::load_page
+		}
+		} 935 1400 1120 1575
+
+	# Search/filter button for right side
+	add_de1_image "DSx_past" 1435 1390 "[skin_directory_graphics]/icons/store_button.png"
+	add_de1_text "DSx_past" 1477 1473 -font fontawesome_reg_small \
+		-fill $::DSx_settings(font_colour) -anchor "nw" -text $::DYE::GUI::symbol_filter
+	add_de1_variable "DSx_past" 1566 1495 -font [DSx_font font 7] -fill $::DSx_settings(font_colour) -anchor "center" \
+		-justify "center" -textvariable {$::DYE::FSH::data(right_filter_status)}
+	add_de1_button "DSx_past" { 
+		if { $::DYE::FSH::data(right_filter_status) eq "on" } {
+			set ::DYE::FSH::data(right_filter_status) "off"
+			unset -nocomplain ::DSx_filtered_past_shot_files2
+			fill_DSx_past2_shots_listbox
+		} else {
+			::DYE::FSH::load_page 
+		}
+		} 1435 1400 1620 1575
+
+	### FULL PAGE CHARTS FROM HISTORY VIEWER ###
+	set widgets(DSx_past_zoomed_shot_desc) [add_de1_variable "DSx_past_zoomed" 1280 1535 -font [DSx_font font 7] \
+		-fill $::DYE::settings(shot_desc_font_color) \
+		-anchor "center" -justify center -width [rescale_x_skin 2200] \
+		-textvariable {$::DYE::past_shot_desc_one_line}]
+	set widgets(DSx_past_zoomed_shot_desc2) [add_de1_variable "DSx_past2_zoomed" 1280 1535 -font [DSx_font font 7] \
+		-fill $::DYE::settings(shot_desc_font_color) \
+		-anchor "center" -justify center -width [rescale_x_skin 2200] \
+		-textvariable {$::DYE::past_shot_desc_one_line2}]
+	trace add execution ::history_godshots_switch leave ::DYE::DE::history_godshots_switch_leave_hook
+	
+	### SCREENSAVER ###
+	# Makes the left side of the app screensaver clickable so that you can describe your last shot without waking up 
+	# the DE1. Note that this would overlap with the DSx plugin management option, if enabled. Provided by Damian.
+	if { $::DYE::settings(describe_from_sleep) == 1} {
+		set sleep_describe_symbol $::DYE::settings(describe_icon)
+		set sleep_describe_button_coords {230 0 460 230}
+	} else { 
+		set sleep_describe_symbol ""
+		set sleep_describe_button_coords {0 0 0 0}
+	}
+	set widgets(describe_from_sleep_symbol) [add_de1_text "saver" 275 35 -font fontawesome_reg_big \
+		-fill $::DSx_settings(font_colour) -anchor "nw" -text $sleep_describe_symbol]	
+	set widgets(describe_from_sleep_button) [add_de1_button "saver" { ::DYE::DE::load_page current 1 } \
+		{*}$sleep_describe_button_coords]
+	
+	### DEBUG TEXT IN SOME PAGES ###
+	# Show the debug text variable. Set it to any value I want to see on screen at the moment.
+	if { $::DSx_skindebug == 1 } {
+		add_de1_variable "$::DYE::GUI::pages DSx_past $::DSx_standby_pages" \
+			20 20 -font [DSx_font font 7] -fill $::DSx_settings(orange) -anchor "nw" -textvariable {$::DYE::debug_text}
+		#-textvariable {enjoyment=$::DYE::DE::data(espresso_enjoyment)}
+		
+		# Debug button/text to do some debugging action (current to go straight to the ::DYE::DE page)
+		# TODO This is not working. Console hides in background as soon as focus is given to anything, and cannot
+		#	get it back.
+		#add_de1_text "$::DSx_home_pages" 2300 225 -font [DSx_font font 7] -fill $::DSx_settings(orange) -anchor "nw" \
+		#	-text "CONSOLE"
+		#add_de1_button "$::DSx_standby_pages" { catch { console hide } \
+		# 	console show; set DYE_window {[focus -displayof .can]} } 2250 220 2500 280		
+	}	
+}
+
+# Call this on the page "load_page" namespace proc, before the actual page_show call.
 proc ::DYE::GUI::set_previous_page { ns } {
 	set prev_page $::de1(current_context)
 	if { $prev_page eq "::DYE::MENU" } {
@@ -1425,23 +1310,8 @@ proc ::DYE::GUI::set_previous_page { ns } {
 	set "${ns}::data(previous_page)" $prev_page
 }
 
-# Skin-independent font selection. A wrapper to either ::get_font in utils.tcl, or a skin-specific font management
-# function.
-proc ::DYE::GUI::get_font { {font_name {}} {size {}} } {
-	if { $font_name eq "" } { set font_name $::DYE::GUI::font }
-	if { $size eq "" } { set size $::DYE::GUI::font_size }
+proc ::DYE::GUI::get_font { font size } {
 	
-	if { $::DYE::GUI::skin eq "DSx" } {
-		return [::DSx_font $font_name $size]
-	} elseif { $::DYE::GUI::skin eq "Insight" } {
-		if { [string range $font_name end-4 end] eq "_bold" } {
-			return "[string range $font_name 0 end-4]${size}_bold"
-		} else {
-			return "${font_name}_$size"
-		}
-	} else {
-		return [::get_font $font_name $size]
-	}
 }
 	
 proc ::DYE::GUI::page_name_is_namespace { page_name } {
@@ -1460,7 +1330,7 @@ proc ::DYE::GUI::select_widgets { widgets {ns {}} } {
 			if { $wn ne "" && [info exists $wn] } { 
 				lappend result $wn  
 			} else {
-				msg "DYE ERROR: GUI::select_widgets - can't find widget '$wn'"
+				msg "DYE ERROR: select_widgets - can't find widget '$wn'"
 			}
 		}
 	} else {
@@ -1481,39 +1351,13 @@ proc ::DYE::GUI::select_widgets { widgets {ns {}} } {
 							incr i
 						}
 					}
-				} elseif { [string range $wn end-8 end] eq "_clicker*"} {
-					set wn [string range $wn 0 end-1]					
-					foreach subtype "{} _dec_small_inc _dec_big_inc _inc_small_inc _inc_big_inc _button" {
-						if { [info exists "${ns}::widgets(${wn}$subtype)"] } {
-							lappend result [subst \$${ns}::widgets(${wn}$subtype)]
-							set some_found 1
-						}
-					}
 				} else {
 					set wn [string range $wn 0 end-1]
 					
-					foreach subtype "{} _label _symbol _img _button _state _clicker _rating" {
-						if { $subtype eq "_clicker" } {
-							foreach subsubtype "{} _dec_small_inc _dec_big_inc _inc_small_inc _inc_big_inc _button" {
-								if { [info exists "${ns}::widgets(${wn}_clicker${subsubtype})"] } {
-									lappend result [subst \$${ns}::widgets(${wn}_clicker${subsubtype})]
-									set some_found 1
-								}
-							}
-						} elseif { $subtype eq "_rating " } {
-							set i 1
-							while { [info exists "${ns}::widgets(${wn}_rating$i)"] } {
-								lappend result [subst \$${ns}::widgets(${wn}_rating$i)]
-								if { [info exists "${ns}::widgets(${wn}_rating_half$i)"] } {
-									lappend result [subst \$${ns}::widgets(${wn}_rating_half$i)]
-								}
-								incr i
-							}
-						} else {
-							if { [info exists "${ns}::widgets(${wn}$subtype)"] } {
-								lappend result [subst \$${ns}::widgets(${wn}$subtype)]
-								set some_found 1
-							}
+					foreach subtype "{} _label _symbol _img _button _state _clicker _clicker_img" {
+						if { [info exists "${ns}::widgets(${wn}$subtype)"] } {
+							lappend result [subst \$${ns}::widgets(${wn}$subtype)]
+							set some_found 1
 						}
 					}
 				}
@@ -1655,13 +1499,13 @@ proc ::DYE::GUI::add_page { page args } {
 	
 	if { [info exists opts(-title)] } {
 		set w [::add_de1_text $page 1280 60 \
-			-font [::DYE::GUI::get_font $::DYE::GUI::header_font $::DYE::GUI::header_font_size] \
+			-font [DSx_font font $::DYE::GUI::header_font_size] \
 			-fill $::DYE::GUI::page_title_color -anchor "center" -text $opts(-title)]
 		if { $has_ns } { set "${page}::widgets(page_title)" $w }
 	} elseif { $has_ns && [info exists ${page}::data(page_title)] } {
 		set "${page}::widgets(page_title)" [::add_de1_variable $page 1280 60 \
-			-font [::DYE::GUI::get_font $::DYE::GUI::header_font $::DYE::GUI::header_font_size] \
-			-fill $::DYE::GUI::page_title_color -anchor "center" -textvariable [subst {\$${page}::data(page_title)}] ]
+			-font [DSx_font font $::DYE::GUI::header_font_size] -fill $::DYE::GUI::page_title_color \
+			-anchor "center" -textvariable [subst {\$${page}::data(page_title)}] ]
 	}
 	
 	set done_button 1
@@ -1712,42 +1556,39 @@ proc ::DYE::GUI::add_page { page args } {
 # Adds a Cancel button to a page. Two widgets called "cancel_text" and "cancel_button" are added to the namespace 
 #	widgets array, and the "cancel_button" widget is returned.
 proc ::DYE::GUI::add_cancel_button { page x y { command {} } { text {Cancel} } } {	
-#	set has_ns [page_name_is_namespace $page]
+	set has_ns [page_name_is_namespace $page]
+	set width $::DYE::GUI::button1_width
+	set height $::DYE::GUI::button1_height
 	
-	return [add_button1 $page page_cancel $x $y $text $command]
-#	set width $::DYE::GUI::button1_width
-#	set height $::DYE::GUI::button1_height
-#	
-#	set w [ add_de1_image $page $x $y $::DYE::GUI::button1_img ]
-#	if { $has_ns } { set "${page}::widgets(cancel_img)" $w }
-#	set w [add_de1_text $page \
-#		[expr {$x + ($width / 2)}] [expr {$y + ($height / 2) - 4}] \
-#		-font [::DYE::GUI::get_font $::DYE::GUI::font 10] -fill $::DYE::GUI::font_color -anchor "center" \
-#		-text [translate $text]]
-#	if { $has_ns } { set "${page}::widgets(cancel_text)" $w }
-#	
-#	set widget [add_de1_button $page $command $x $y [expr {$x + $width}] [expr {$y + $height}]]
-#	if { $has_ns } { set "${page}::widgets(cancel_button)" $widget }
-#	return $widget
+	set w [ add_de1_image $page $x $y $::DYE::GUI::button1_img ]
+	if { $has_ns } { set "${page}::widgets(cancel_img)" $w }
+	set w [add_de1_text $page \
+		[expr {$x + ($width / 2)}] [expr {$y + ($height / 2) - 4}] \
+		-font [DSx_font font 10] -fill $::DYE::GUI::font_color -anchor "center" \
+		-text [translate $text]]
+	if { $has_ns } { set "${page}::widgets(cancel_text)" $w }
+	
+	set widget [add_de1_button $page $command $x $y [expr {$x + $width}] [expr {$y + $height}]]
+	if { $has_ns } { set "${page}::widgets(cancel_button)" $widget }
+	return $widget
 }
 
 # Adds an Ok / Done button to a page. Two widgets called "done_text" and "done_button" are added to the namespace 
 #	widgets array, and the "done_button" widget is returned.
 proc ::DYE::GUI::add_done_button { page x y { command {} } { text {Done} } } {
-#	set has_ns [page_name_is_namespace $page]
-#	set width $::DYE::GUI::button1_width
-#	set height $::DYE::GUI::button1_height
+	set has_ns [page_name_is_namespace $page]
+	set width $::DYE::GUI::button1_width
+	set height $::DYE::GUI::button1_height
 	
-	return [add_button1 $page page_done $x $y $text $command]
-#	set w [::add_de1_image $page $x $y $::DYE::GUI::button1_img ]
-#	if { $has_ns } { set "${page}::widgets(done_img)" $w }
-#	set w [::add_de1_text $page [expr {$x + ($width / 2)}] [expr {$y + ($height / 2) - 4}] \
-#		-font [::DYE::GUI::get_font $::DYE::GUI::font 10] -fill $::DYE::GUI::font_color -anchor "center" -text [translate $text]]
-#	if { $has_ns } { set "${page}::widgets(done_text)" $w }
-#	
-#	set widget [::add_de1_button $page $command $x $y [expr {$x + $width}] [expr {$y + $height}]]
-#	if { $has_ns } { set "${page}::widgets(done_button)" $widget }
-#	return $widget 
+	set w [::add_de1_image $page $x $y $::DYE::GUI::button1_img ]
+	if { $has_ns } { set "${page}::widgets(done_img)" $w }
+	set w [::add_de1_text $page [expr {$x + ($width / 2)}] [expr {$y + ($height / 2) - 4}] \
+		-font [DSx_font font 10] -fill $::DYE::GUI::font_color -anchor "center" -text [translate $text]]
+	if { $has_ns } { set "${page}::widgets(done_text)" $w }
+	
+	set widget [::add_de1_button $page $command $x $y [expr {$x + $width}] [expr {$y + $height}]]
+	if { $has_ns } { set "${page}::widgets(done_button)" $widget }
+	return $widget 
 }
 
 # Adds a button1 (the same as used for the Done/Cancel)
@@ -1756,26 +1597,11 @@ proc ::DYE::GUI::add_button1 { page widget_name x y label command args } {
 	set width $::DYE::GUI::button1_width
 	set height $::DYE::GUI::button1_height
 	
-	DYE::args_add_option_if_not_exists args -font [::DYE::GUI::get_font $::DYE::GUI::button_font 10] 
-	#[::DYE::GUI::get_font $::DYE::GUI::button_font 10]
-	DYE::args_add_option_if_not_exists args -fill $::DYE::GUI::button_font_fill
+	DYE::args_add_option_if_not_exists args -font [DSx_font font 10]
+	DYE::args_add_option_if_not_exists args -fill $::DYE::GUI::font_color
 	DYE::args_add_option_if_not_exists args -anchor "center"
-
-#	variable button_font "font"
-#	variable button_font_fill "#ffffff"
-#	variable button_fill "#c0c5e3"
-
-	if { $::DYE::GUI::button1_img eq "" } {
-		if { $::settings(skin) eq "DSx" } {
-			set w [::DYE::GUI::rounded_rectangle_outline $page $x $y [expr {$x+$width}] [expr {$y+$height}] \
-				[rescale_x_skin 50] $::DYE::GUI::button_fill 5]			
-		} else {
-			set w [::DYE::GUI::rounded_rectangle $page $x $y [expr {$x+$width}] [expr {$y+$height}] \
-				[rescale_x_skin 40] $::DYE::GUI::button_fill]
-		}
-	} else {	
-		#set w [::add_de1_image $page $x $y $::DYE::GUI::button1_img]
-	}
+	
+	set w [::add_de1_image $page $x $y $::DYE::GUI::button1_img]
 	if { $has_ns } { set "${page}::widgets(${widget_name}_img)" $w }
 	if { $label ne "" } {
 		set w [::add_de1_text $page [expr {$x + ($width / 2)}] [expr {$y + ($height / 2) - 4}] \
@@ -1803,22 +1629,11 @@ proc ::DYE::GUI::add_button2 { page widget_name x y label state_variable symbol 
 	set width $::DYE::GUI::button2_width
 	set height $::DYE::GUI::button2_height
 	
-	set label_fill [DYE::args_get_option args -label_fill $::DYE::GUI::button_font_fill 1]
-	set symbol_fill [DYE::args_get_option args -symbol_fill $::DYE::GUI::button_font_fill 1]
-	set state_fill [DYE::args_get_option args -state_fill $::DYE::GUI::button_font_fill 1]
-	set fill [DYE::args_get_option args -state_fill $::DYE::GUI::button_fill 1]
+	set label_fill [DYE::args_get_option args -label_fill $::DYE::GUI::font_color 1]
+	set symbol_fill [DYE::args_get_option args -symbol_fill $::DYE::GUI::font_color 1]
+	set state_fill [DYE::args_get_option args -state_fill $::DYE::GUI::font_color 1]
 	
-	if { $::DYE::GUI::button2_img eq "" } {
-		if { $::settings(skin) eq "DSx" } {
-			set w [::DYE::GUI::rounded_rectangle_outline $page $x $y [expr {$x+$width}] [expr {$y+$height}] \
-				[rescale_x_skin 60] $fill 3]
-		} else {
-			set w [::DYE::GUI::rounded_rectangle $page $x $y [expr {$x+$width}] [expr {$y+$height}] \
-				[rescale_x_skin 40] $fill]
-		}
-	} else {
-		#set w [::add_de1_image $page $x $y $::DYE::GUI::button2_img ]
-	}
+	set w [::add_de1_image $page $x $y $::DYE::GUI::button2_img ]
 	if { $has_ns } { set "${page}::widgets(${widget_name}_img)" $w } 
 
 	if { $symbol eq "" } {
@@ -1853,12 +1668,12 @@ proc ::DYE::GUI::add_button2 { page widget_name x y label state_variable symbol 
 	}
 	if { $label eq "" && [info exists "${page}::data(${widget_name}_label)"] } {
 		set w [::add_de1_variable $page $x_label [expr {$y_label+3}] \
-			-font [::DYE::GUI::get_font $::DYE::GUI::button_font $label_size] -fill $label_fill -justify "center" -anchor "center" \
+			-font [DSx_font font $label_size] -fill $label_fill -justify "center" -anchor "center" \
 			-textvariable "\$${page}::data(${widget_name}_label)" ]
 		if { $has_ns } { set "${page}::widgets(${widget_name}_label)" $w }
 	} else {
 		set w [::add_de1_text $page $x_label $y_label \
-			-text $label -font [::DYE::GUI::get_font $::DYE::GUI::button_font $label_size] -fill $label_fill -justify "center" -anchor "center"]
+			-text $label -font [DSx_font font $label_size] -fill $label_fill -justify "center" -anchor "center"]
 		if { $has_ns } { set "${page}::widgets(${widget_name}_label)" $w }
 	}
 	if { $state_variable ne "" } {
@@ -1866,7 +1681,7 @@ proc ::DYE::GUI::add_button2 { page widget_name x y label state_variable symbol 
 			set state_variable "\$${page}::data(${widget_name}_state)"
 		}
 		set w [::add_de1_variable $page $x_state $y_state \
-			-font [::DYE::GUI::get_font $::DYE::GUI::button_font $state_size] -fill $state_fill -justify "center" -anchor "center" \
+			-font [DSx_font font $state_size] -fill $state_fill -justify "center" -anchor "center" \
 			-textvariable $state_variable]
 		if { $has_ns } { set "${page}::widgets(${widget_name}_state)" $w }
 	}
@@ -1901,8 +1716,7 @@ proc ::DYE::GUI::add_button { page widget_name x0 y0 x1 y1 label command args } 
 
 	set label_args {}
 	set label_args [DYE::args_extract_prefixed args -label_]
-	set font_size [DYE::args_get_option label_args -font_size $::DYE::GUI::font_size 1]
-	DYE::args_add_option_if_not_exists label_args -font [::DYE::GUI::get_font $::DYE::GUI::font $font_size] 
+	DYE::args_add_option_if_not_exists label_args -font [DSx_font font $::DYE::GUI::font_size] 
 	DYE::args_add_option_if_not_exists label_args -fill $::DYE::GUI::font_color
 	
 	.can create rect $rx0 $ry0 $rx1 $ry1 -tag $btn_name -state hidden {*}$args
@@ -1939,56 +1753,6 @@ proc ::DYE::GUI::add_button { page widget_name x0 y0 x1 y1 label command args } 
 	return $btn2_name
 }
 
-proc ::DYE::GUI::rounded_rectangle {context x1 y1 x2 y2 radius colour } {
-	set x1 [rescale_x_skin $x1] 
-	set y1 [rescale_y_skin $y1] 
-	set x2 [rescale_x_skin $x2] 
-	set y2 [rescale_y_skin $y2]
-	if { [info exists ::_rect_id] != 1 } { set ::_rect_id 0 }
-	set tag "rect_$::_rect_id"
-	.can create oval $x1 $y1 [expr $x1 + $radius] [expr $y1 + $radius] -fill $colour -outline $colour -width 0 -tag $tag -state "hidden"
-	.can create oval [expr $x2-$radius] $y1 $x2 [expr $y1 + $radius] -fill $colour -outline $colour -width 0 -tag $tag -state "hidden"
-	.can create oval $x1 [expr $y2-$radius] [expr $x1+$radius] $y2 -fill $colour -outline $colour -width 0 -tag $tag -state "hidden"
-	.can create oval [expr $x2-$radius] [expr $y2-$radius] $x2 $y2 -fill $colour -outline $colour -width 0 -tag $tag -state "hidden"
-	.can create rectangle [expr $x1 + ($radius/2.0)] $y1 [expr $x2-($radius/2.0)] $y2 -fill $colour -outline $colour -width 0 -tag $tag -state "hidden"
-	.can create rectangle $x1 [expr $y1 + ($radius/2.0)] $x2 [expr $y2-($radius/2.0)] -fill $colour -outline $colour -width 0 -tag $tag -state "hidden"
-	::add_visual_item_to_context $contexts $tag
-	incr ::_rect_id
-	return $tag
-}
-
-proc ::DYE::GUI::rounded_rectangle_outline {context x1 y1 x2 y2 arc_offset colour width } {
-	set x1 [rescale_x_skin $x1] 
-	set y1 [rescale_y_skin $y1] 
-	set x2 [rescale_x_skin $x2] 
-	set y2 [rescale_y_skin $y2]
-	if { [info exists ::_rect_id] != 1 } { set ::_rect_id 0 }
-	set tag "rect_$::_rect_id"
-
-	.can create arc [expr $x1] [expr $y1+$arc_offset] [expr $x1+$arc_offset] [expr $y1] -style arc -outline $colour \
-		-width [expr $width-1] -tag $tag -start 90 -disabledoutline $::DYE::GUI::disabled_color 
-	.can create arc [expr $x1] [expr $y2-$arc_offset] [expr $x1+$arc_offset] [expr $y2] -style arc -outline $colour \
-		-width [expr $width-1] -tag $tag -start 180 -disabledoutline $::DYE::GUI::disabled_color
-	.can create arc [expr $x2-$arc_offset] [expr $y1] [expr $x2] [expr $y1+$arc_offset] -style arc -outline $colour \
-		-width [expr $width-1] -tag $tag -start 0 -disabledoutline $::DYE::GUI::disabled_color
-	.can create arc [expr $x2-$arc_offset] [expr $y2] [expr $x2] [expr $y2-$arc_offset] -style arc -outline $colour \
-		-width [expr $width-1] -tag $tag -start -90 -disabledoutline $::DYE::GUI::disabled_color
-	
-	.can create line [expr $x1+$arc_offset/2] [expr $y1] [expr $x2-$arc_offset/2] [expr $y1] -fill $colour \
-		-width $width -tag $tag -disabledfill $::DYE::GUI::disabled_color
-	.can create line [expr $x2] [expr $y1+$arc_offset/2] [expr $x2] [expr $y2-$arc_offset/2] -fill $colour \
-		-width $width -tag $tag -disabledfill $::DYE::GUI::disabled_color
-	.can create line [expr $x1+$arc_offset/2] [expr $y2] [expr $x2-$arc_offset/2] [expr $y2] -fill $colour \
-		-width $width -tag $tag -disabledfill $::DYE::GUI::disabled_color
-	.can create line [expr $x1] [expr $y1+$arc_offset/2] [expr $x1] [expr $y2-$arc_offset/2] -fill $colour \
-		-width $width -tag $tag -disabledfill $::DYE::GUI::disabled_color
-	
-	::add_visual_item_to_context $context $tag
-	incr ::_rect_id
-	return $tag
-}
-
-
 # Calls add_de1_text but with the DYE GUI aspect by default. Returns the created widget. 
 # Named options (except the new ones described below) are passed through to add_de1_text.
 # New named options:
@@ -1996,18 +1760,16 @@ proc ::DYE::GUI::rounded_rectangle_outline {context x1 y1 x2 y2 arc_offset colou
 #  -has_button: if 1, makes a clickable rectangular area around the symbol, with action given by -button_cmd
 proc ::DYE::GUI::add_text { page x y text args } {
 	set has_ns [page_name_is_namespace $page]
-	set widget_name [DYE::args_get_option args -widget_name {} 1]
-	
 	set has_button [DYE::args_get_option args -has_button 0 1]
 	set button_cmd [DYE::args_get_option args -button_cmd {} 1]
 	set button_width [DYE::args_get_option args -button_width 200 1]
 	set button_height [DYE::args_get_option args -button_height 40 1]
 	
-	set font_size [DYE::args_get_option args -font_size $::DYE::GUI::font_size 1]
-	DYE::args_add_option_if_not_exists args -font [::DYE::GUI::get_font $::DYE::GUI::font $font_size]
+	DYE::args_add_option_if_not_exists args -font [DSx_font font $::DYE::GUI::font_size]
 	DYE::args_add_option_if_not_exists args -fill $::DYE::GUI::font_color
 	set anchor [DYE::args_add_option_if_not_exists args -anchor nw]
-
+	set widget_name [DYE::args_get_option args -widget_name {} 1]
+	
 	set widget [::add_de1_text $page $x $y {*}$args -text $text]
 	if { $has_ns && $widget_name ne "" } { set "${page}::widgets($widget_name)" $widget }
 	
@@ -2100,9 +1862,8 @@ proc ::DYE::GUI::add_symbol { page x y symbol args } {
 #  -has_button: if 1, makes a clickable rectangular area around the symbol, with action given by -button_cmd
 proc ::DYE::GUI::add_variable { page x y textvariable args } {	
 	set has_ns [page_name_is_namespace $page]
-
-	set font_size [DYE::args_get_option args -font_size $::DYE::GUI::font_size 1]
-	DYE::args_add_option_if_not_exists args -font [::DYE::GUI::get_font $::DYE::GUI::font $font_size]
+	
+	DYE::args_add_option_if_not_exists args -font [DSx_font font $::DYE::GUI::font_size]
 	DYE::args_add_option_if_not_exists args -fill $::DYE::GUI::font_color
 	set anchor [DYE::args_add_option_if_not_exists args -anchor nw]
 	set widget_name [DYE::args_get_option args -widget_name {} 1]
@@ -2180,8 +1941,7 @@ proc ::DYE::GUI::add_text_entry { page field_name x_label y_label x_widget y_wid
 	
 	set textvariable [DYE::args_add_option_if_not_exists args -textvariable "${page}::data($widget_name)"]
 	DYE::args_add_option_if_not_exists args -width [expr {int($width * $::globals(entry_length_multiplier))}]
-	set font_size [DYE::args_get_option args -font_size $::DYE::GUI::font_size 1]
-	DYE::args_add_option_if_not_exists args -font [::DYE::GUI::get_font $::DYE::GUI::font $font_size]	
+	DYE::args_add_option_if_not_exists args -font [DSx_font font $::DYE::GUI::font_size]	
 	set dropdown_callback_cmd [DYE::args_get_option args -dropdown_callback_cmd "${page}::select_${widget_name}_callback" 1]
 	set default_dropdown_cmd "say \"select\" $::settings(sound_button_in); \
 		::DYE::IS::load_page $field_name $dropdown_callback_cmd \$$textvariable"
@@ -2189,7 +1949,7 @@ proc ::DYE::GUI::add_text_entry { page field_name x_label y_label x_widget y_wid
 	set editor_page [DYE::args_get_option args -editor_page 1 1]
 	
 	DYE::args_add_option_if_not_exists args -justify left
-	DYE::args_add_option_if_not_exists args -relief $::DYE::GUI::entry_relief
+	DYE::args_add_option_if_not_exists args -relief sunken
 	DYE::args_add_option_if_not_exists args -borderwidth 1 
 	DYE::args_add_option_if_not_exists args -bg $::DYE::GUI::bg_color
 	DYE::args_add_option_if_not_exists args -highlightthickness 1
@@ -2231,8 +1991,7 @@ proc ::DYE::GUI::add_text_entry { page field_name x_label y_label x_widget y_wid
 	if { $x_label > -1 && $y_label > -1 } {
 		set label_args {}
 		set label_args [DYE::args_extract_prefixed args -label_]
-		set label_font_size [DYE::args_get_option label_args -font_size $font_size 1]
-		DYE::args_add_option_if_not_exists label_args -font [::DYE::GUI::get_font $::DYE::GUI::font $label_font_size] 
+		DYE::args_add_option_if_not_exists label_args -font [DSx_font font $::DYE::GUI::font_size] 
 		DYE::args_add_option_if_not_exists label_args -fill $::DYE::GUI::font_color
 		DYE::args_add_option_if_not_exists label_args -anchor "nw"
 		
@@ -2266,17 +2025,9 @@ proc ::DYE::GUI::add_text_entry { page field_name x_label y_label x_widget y_wid
 			}
 			if { $extra_clicker_cmd ne "" } { append clicker_cmd $extra_clicker_cmd } 
 			
-#			set w [::add_de1_image $page [expr {$x_widget-250}] [expr {$y_widget-8}] \
-#				 "[skin_directory_graphics]/icons/click_no_box.png"]
-#			if { $has_ns } { set "${page}::widgets(${widget_name}_clicker_img)" $w}
-			set w [::DYE::GUI::add_symbol $page [expr {$x_widget-235}] [expr {$y_widget-3}] chevron_double_left]
-			if { $has_ns } { set "${page}::widgets(${widget_name}_clicker_dec_big_inc)" $w}
-			set w [::DYE::GUI::add_symbol $page [expr {$x_widget-100}] [expr {$y_widget-3}] chevron_left]
-			if { $has_ns } { set "${page}::widgets(${widget_name}_clicker_dec_small_inc)" $w}
-			set w [::DYE::GUI::add_symbol $page [expr {$x_widget+180}] [expr {$y_widget-3}] chevron_right]
-			if { $has_ns } { set "${page}::widgets(${widget_name}_clicker_inc_small_inc)" $w}
-			set w [::DYE::GUI::add_symbol $page [expr {$x_widget+270}] [expr {$y_widget-3}] chevron_double_right]
-			if { $has_ns } { set "${page}::widgets(${widget_name}_clicker_inc_big_inc)" $w}
+			set w [::add_de1_image $page [expr {$x_widget-250}] [expr {$y_widget-8}] \
+				 "[skin_directory_graphics]/icons/click_no_box.png"]
+			if { $has_ns } { set "${page}::widgets(${widget_name}_clicker_img)" $w}
 			
 			set w [::add_de1_button $page $clicker_cmd \
 				[expr {$x_widget-250}] [expr {$y_widget-8}] [expr {$x_widget+360}] [expr {$y_widget+75}] ]
@@ -2303,7 +2054,7 @@ proc ::DYE::GUI::add_text_entry { page field_name x_label y_label x_widget y_wid
 	
 	if { $data_type eq "category" && $field_name ne "" } {
 		set w [add_de1_text $page [expr {$x_widget+300}] [expr {$y_widget-11}] -font fontawesome_reg_small \
-			-fill $::DYE::GUI::font_color -anchor "nw" -justify "left" -text $DYE::GUI::symbol_sort_down ]
+			-fill $::DSx_settings(font_colour) -anchor "nw" -justify "left" -text $DYE::GUI::symbol_sort_down ]
 		if { $has_ns } { set "${page}::widgets(${widget_name}_dropdown)" $w }
 					 		
 		set w [add_de1_button $page $dropdown_cmd [expr {$x_widget+295}] $y_widget \
@@ -2350,12 +2101,11 @@ proc ::DYE::GUI::add_multiline_entry { page field_name x_label y_label x_widget 
 	set textvariable [DYE::args_add_option_if_not_exists args -textvariable "${page}::data($field_name)"]
 	DYE::args_add_option_if_not_exists args -width [expr {int($width * $::globals(entry_length_multiplier))}]
 	DYE::args_add_option_if_not_exists args -height $height
-	set font_size [DYE::args_get_option args -font_size $::DYE::GUI::font_size 1]
-	DYE::args_add_option_if_not_exists args -font [::DYE::GUI::get_font $::DYE::GUI::font $font_size]
+	DYE::args_add_option_if_not_exists args -font [DSx_font font $::DYE::GUI::font_size]
 	set dropdown_callback_cmd [DYE::args_get_option args -dropdown_callback_cmd "${page}::select_${field_name}_callback" 1]
 	set editor_page [DYE::args_get_option args -editor_page 1 1]
 	
-	DYE::args_add_option_if_not_exists args -relief $::DYE::GUI::entry_relief
+	DYE::args_add_option_if_not_exists args -relief sunken
 	DYE::args_add_option_if_not_exists args -borderwidth 1 
 	DYE::args_add_option_if_not_exists args -bg $::DYE::GUI::bg_color
 	DYE::args_add_option_if_not_exists args -highlightthickness 1
@@ -2368,7 +2118,7 @@ proc ::DYE::GUI::add_multiline_entry { page field_name x_label y_label x_widget 
 	
 	if { $x_label > -1 && $y_label > -1 } {
 		set label_args [DYE::args_extract_prefixed args -label_]
-		DYE::args_add_option_if_not_exists label_args -font [::DYE::GUI::get_font $::DYE::GUI::font $::DYE::GUI::font_size] 
+		DYE::args_add_option_if_not_exists label_args -font [DSx_font font $::DYE::GUI::font_size] 
 		DYE::args_add_option_if_not_exists label_args -fill $::DYE::GUI::font_color
 		DYE::args_add_option_if_not_exists label_args -anchor "nw"
 		
@@ -2530,22 +2280,20 @@ proc ::DYE::GUI::add_listbox { page widget_name x_label y_label x_widget y_widge
 	if { ![DYE::args_has_option $args -listvariable] && [info exists ${page}::data($widget_name)] } {
 		DYE::args_add_option_if_not_exists args -listvariable "${page}::data($widget_name)"
 	}
-	
-	set font_size [DYE::args_get_option args -font_size $::DYE::GUI::font_size 1]
-	DYE::args_add_option_if_not_exists args -font [::DYE::GUI::get_font $::DYE::GUI::font $font_size]
-	DYE::args_add_option_if_not_exists args -relief $::DYE::GUI::listbox_relief
-	DYE::args_add_option_if_not_exists args -borderwidth $::DYE::GUI::listbox_bwidth
-	DYE::args_add_option_if_not_exists args -foreground $::DYE::GUI::listbox_fg 	
-	DYE::args_add_option_if_not_exists args -background $::DYE::GUI::listbox_bg
-	DYE::args_add_option_if_not_exists args -selectforeground $::DYE::GUI::listbox_sfg
-	DYE::args_add_option_if_not_exists args -selectbackground $::DYE::GUI::listbox_sbg
-	DYE::args_add_option_if_not_exists args -selectborderwidth $::DYE::GUI::listbox_sbwidth
+	DYE::args_add_option_if_not_exists args -font [DSx_font font $::DYE::GUI::font_size]
+	DYE::args_add_option_if_not_exists args -relief flat
+	DYE::args_add_option_if_not_exists args -borderwidth 1 
+	DYE::args_add_option_if_not_exists args -selectborderwidth 1
+	DYE::args_add_option_if_not_exists args -background $::DYE::GUI::bg_color
+	DYE::args_add_option_if_not_exists args -selectbackground $::DYE::GUI::font_color
+	DYE::args_add_option_if_not_exists args -selectforeground $::DYE::GUI::bg_color
 	DYE::args_add_option_if_not_exists args -disabledforeground $::DYE::GUI::disabled_color
-	DYE::args_add_option_if_not_exists args -highlightthickness $::DYE::GUI::listbox_hthickness
-	DYE::args_add_option_if_not_exists args -highlightcolor $::DYE::GUI::listbox_hcolor
+	DYE::args_add_option_if_not_exists args -highlightthickness 1
+	DYE::args_add_option_if_not_exists args -highlightcolor $::DYE::GUI::font_color
+	DYE::args_add_option_if_not_exists args -justify left
+	DYE::args_add_option_if_not_exists args -foreground $::DYE::GUI::font_color 
 	DYE::args_add_option_if_not_exists args -exportselection 0
 	DYE::args_add_option_if_not_exists args -selectmode browser
-	DYE::args_add_option_if_not_exists args -justify left
 	
 	set scrollbar_width [rescale_y_skin [DYE::args_get_option args -scrollbar_width 75 1]]
 	set scrollbar_height [rescale_x_skin [DYE::args_get_option args -scrollbar_height 75 1]]
@@ -2554,8 +2302,7 @@ proc ::DYE::GUI::add_listbox { page widget_name x_label y_label x_widget y_widge
 	if { $x_label > -1 && $y_label > -1 } {
 		set label [DYE::args_get_option args label "" 1]		
 		set label_args [DYE::args_extract_prefixed args -label_]
-		set label_font_size [DYE::args_get_option label_args -font_size $font_size 1]
-		DYE::args_add_option_if_not_exists label_args -font [::DYE::GUI::get_font $::DYE::GUI::font $label_font_size] 
+		DYE::args_add_option_if_not_exists label_args -font [DSx_font font $::DYE::GUI::font_size] 
 		DYE::args_add_option_if_not_exists label_args -fill $::DYE::GUI::font_color
 		DYE::args_add_option_if_not_exists label_args -anchor "nw"
 			
@@ -2582,12 +2329,10 @@ proc ::DYE::GUI::add_listbox { page widget_name x_label y_label x_widget y_widge
 		-length $scrollbar_height -width $scrollbar_width -sliderlength $sliderlength \
 		-variable "${page}::widgets(advsteps_$widget_name)" \
 		-command " listbox_moveto \$${page}::widgets($widget_name) \$${page}::widgets(${widget_name}_slider) " \
-		-background $::DYE::GUI::scrollbar_bg -foreground $::DYE::GUI::scrollbar_fg \
-		-troughcolor $::DYE::GUI::scrollbar_troughcolor -relief $::DYE::GUI::scrollbar_relief \
-		-font [::DYE::GUI::get_font $::DYE::GUI::font $::DYE::GUI::font_size] \
-		-borderwidth $::DYE::GUI::scrollbar_bwidth -highlightthickness $::DYE::GUI::scrollbar_hthickness]
+		-background $::DYE::GUI::font_color -font [DSx_font font $::DYE::GUI::font_size] \
+		-relief flat -foreground #FFFFFF -troughcolor $::DYE::GUI::bg_color -borderwidth 0  -highlightthickness 0]
 	if { $has_ns } { set "${page}::widgets(${widget_name}_scrollbar)" $w }
-
+	
 	return $widget
 }
 
@@ -2689,17 +2434,16 @@ proc ::DYE::GUI::add_checkbox { page check_variable x y {command {}} args } {
 		}			
 	}
 	
-	set font_size [DYE::args_get_option args -font_size $::DYE::GUI::font_size 1]
-	set font [DYE::args_get_option args -font [::DYE::GUI::get_font $::DYE::GUI::font $font_size] 1]
-	
 	if { [DYE::args_has_option $args -label] } {
 		set label [DYE::args_get_option args -label "" 1]
 		set w [::add_de1_text $page [expr {$x+70}] [expr {$y+5}] \
-			-font $font -fill $::DYE::GUI::font_color -anchor "nw" -text [translate $label]]
+			-font [DSx_font font $::DYE::GUI::font_size] \
+			-fill $::DYE::GUI::font_color -anchor "nw" -text [translate $label]]
 		if { $has_ns } { set "${page}::widgets(${widget_name}_label)" $w }
 	} elseif { [info exists "${page}::data(${widget_name}_label)"]} {
 		set w [::add_de1_variable $page [expr {$x+70}] [expr {$y+5}] \
-			-font $font -fill $::DYE::GUI::font_color -anchor "nw" -textvariable "\$${page}::data(${widget_name}_label)" ]
+			-font [DSx_font font $::DYE::GUI::font_size] \
+			-fill $::DYE::GUI::font_color -anchor "nw" -textvariable "\$${page}::data(${widget_name}_label)" ]
 		if { $has_ns } { set "${page}::widgets(${widget_name}_label)" $w }
 	}
 	
@@ -2752,12 +2496,12 @@ proc ::DYE::GUI::add_rating { page field_name x_label y_label x_widget y_widget 
 	if { $x_label > -1 && $y_label > -1 } { 
 		if { $label ne "" } {
 			set w [::add_de1_text $page $x_label [expr {$y_label+3}] \
-				-font [::DYE::GUI::get_font $::DYE::GUI::font $::DYE::GUI::font_size] -fill $::DYE::GUI::font_color -anchor "nw" \
+				-font [DSx_font font $::DYE::GUI::font_size] -fill $::DYE::GUI::font_color -anchor "nw" \
 				-text [translate $label]]
 			if { $has_ns } { set "${page}::widgets(${widget_name}_rating_label)" $w }
 		} elseif { [info exists "${page}::data(${widget_name}_rating_label)"]} {
 			set w [::add_de1_variable $page $x_label [expr {$y_label+3}] \
-				-font [::DYE::GUI::get_font $::DYE::GUI::font $::DYE::GUI::font_size] \
+				-font [DSx_font font $::DYE::GUI::font_size] \
 				-fill $::DYE::GUI::font_color -anchor "nw" -textvariable "\$${page}::data(${widget_name}_label)" ]
 			if { $has_ns } { set "${page}::widgets(${widget_name}_label)" $w }
 		}
@@ -2886,13 +2630,11 @@ namespace eval DYE::DB {
 	variable updating_db 0
 }
 
-# Initializes the database. Called on startup.
+# Initializes the database. Called on starup.
 proc ::DYE::DB::init {} {
 	create
 	trace add execution app_exit {enter} { ::DYE::DB::db_close }
-	if { [ifexists $::debugging 0] != 1 } {
-		populate
-	}
+	populate
 	set ::DYE::GUI::db_progress_msg ""
 	
 	# Ensures the description summary is updated whenever last shot is saved to history
@@ -4422,13 +4164,12 @@ proc ::DYE::DE::setup_ui {} {
 	set x_left_label 100; set x_left_field 400; set width_left_field 28; set x_left_down_arrow 990
 	
 	# BEANS DATA
-	if { $::DYE::GUI::skin eq "DSx" } { set img_src "[skin_directory_graphics]/icons/bean.png" } else {
-		set img_src "[skin_directory]/DSx_Plugins/bean_Insight.png" }	
-	add_de1_image $page $x_left_label 150 $img_src
-	::DYE::GUI::add_text $page $x_left_field 250 [translate "Beans"] -font_size $::DYE::GUI::section_font_size 
-	
+	add_de1_image $page $x_left_label 150 "[skin_directory_graphics]/icons/bean.png"
+	add_de1_text $page $x_left_field 250 -font [DSx_font font 10] -fill $::DSx_settings(font_colour) \
+		-anchor "nw" -text [translate "Beans"]
 	set x 570; set y 245
-	::DYE::GUI::add_symbol $page $x [expr {$y-4}] sort_down -size small
+	add_de1_text $page $x $y -font fontawesome_reg_small \
+		-fill $::DSx_settings(font_colour) -anchor "nw" -justify "left" -text $::DYE::GUI::symbol_sort_down	
 	add_de1_button $page {
 		say "" $::settings(sound_button_in)
 		DYE::IS::load_page bean_desc ::DYE::DE::select_beans_callback \
@@ -4438,7 +4179,7 @@ proc ::DYE::DE::setup_ui {} {
 	# Beans roaster / brand 
 	set y 350
 	::DYE::GUI::add_text_entry $page bean_brand $x_left_label $y $x_left_field $y $width_left_field \
-		-dropdown_callback_cmd "::DYE::DE::select_category_callback" -label_font Helv_7 
+		-dropdown_callback_cmd "::DYE::DE::select_category_callback"
 	
 	# Beans type/name
 	incr y 100
@@ -4460,13 +4201,9 @@ proc ::DYE::DE::setup_ui {} {
 	
 	# EQUIPMENT
 	set y 925
-
-	if { $::DYE::GUI::skin eq "DSx" } { set img_src "[skin_directory_graphics]/icons/niche.png" } else {
-		set img_src "[skin_directory]/DSx_Plugins/niche_Insight.png" }
-	add_de1_image $page $x_left_label $y $img_src
-	::DYE::GUI::add_text $page $x_left_field [expr {$y+130}] [translate "Equipment"] \
-		-font_size $::DYE::GUI::section_font_size
-		
+	add_de1_image $page $x_left_label $y "[skin_directory_graphics]/icons/niche.png"
+	add_de1_text $page $x_left_field [expr {$y+130}] -font [DSx_font font 10] \
+		-fill $::DSx_settings(font_colour) -anchor "nw" -text [translate "Equipment"]
 	# Other equipment (EXPERIMENTAL)
 	if { [info exists ::debugging] && $::debugging == 1 } {
 		add_de1_button $page { say "" $::settings(sound_button_in); ::DYE::SEQ::load_page } \
@@ -4488,10 +4225,9 @@ proc ::DYE::DE::setup_ui {} {
 
 	# EXTRACTION
 	set x_right_label 1280; set x_right_field 1525
-	if { $::DYE::GUI::skin eq "DSx" } { set img_src "[skin_directory_graphics]/icons/espresso.png" } else {
-		set img_src "[skin_directory]/DSx_Plugins/espresso_Insight.png" }	
-	add_de1_image $page $x_right_label 150 $img_src
-	::DYE::GUI::add_text $page 1550 250 [translate "Extraction"] -font_size $::DYE::GUI::section_font_size
+	add_de1_image $page $x_right_label 150 "[skin_directory_graphics]/icons/espresso.png"
+	add_de1_text $page 1550 250 -font [DSx_font font 10] -fill $::DSx_settings(font_colour) \
+		-anchor "nw" -text [translate "Extraction"]
 
 	# Calc EY from TDS button
 	::DYE::GUI::add_button2 $page calc_ey_from_tds 2000 125 [translate "Calc EY from TDS"] \
@@ -4503,8 +4239,7 @@ proc ::DYE::DE::setup_ui {} {
 	
 	# Drink weight
 	set offset 525
-	::DYE::GUI::add_text_entry $page drink_weight [expr {$x_right_label+$offset}] $y \
-		[expr {$x_right_field+$offset}] $y 8
+	::DYE::GUI::add_text_entry $page drink_weight [expr {$x_right_label+$offset}] $y [expr {$x_right_field+$offset}] $y 8
 
 	# Total Dissolved Solids
 	set x_hclicker_field 2050
@@ -4531,12 +4266,10 @@ proc ::DYE::DE::setup_ui {} {
 
 	# PEOPLE
 	set y 1030
-	if { $::DYE::GUI::skin eq "DSx" } { set img_src "[skin_directory_graphics]/icons/people.png" } else {
-		set img_src "[skin_directory]/DSx_Plugins/people_Insight.png" }	
-	add_de1_image $page $x_right_label $y $img_src
-	::DYE::GUI::add_text $page $x_right_field [expr {$y+140}] [translate "People"] \
-		-font_size $::DYE::GUI::section_font_size
-		
+	add_de1_image $page $x_right_label $y "[skin_directory_graphics]/icons/people.png"	
+	add_de1_text $page $x_right_field [expr {$y+140}] -font [DSx_font font 10] \
+		-fill $::DSx_settings(font_colour) -anchor "nw" -text [translate "People"]
+
 	# Barista (my_name)
 	incr y 240
 	::DYE::GUI::add_text_entry $page my_name $x_right_label $y $x_right_field $y 15 \
@@ -4766,9 +4499,9 @@ proc ::DYE::DE::reset_gui_starting_espresso_leave_hook { args } {
 	# Settings already saved in reset_gui_starting_espresso, but as we have redefined them...
 	# TODO ::save_settings FAILS HERE, reported to John, correction should be in next version.
 	set de1appVersion [lindex [package versions de1app] 0]
-#	if { [package vcompare $de1appVersion 1.33.7] >= 0 } {
+	if { [package vcompare $de1appVersion 1.33.7] >= 0 } {
 		::save_settings
-#	}
+	}
 	::DYE::save_settings
 }
 
@@ -5491,32 +5224,31 @@ proc ::DYE::IS::load_page { item_type callback_proc {selected {}} {selectmode {s
 proc ::DYE::IS::setup_ui {} {
 	variable data
 	variable widgets
-	set page [namespace current]
-	set font_size [expr {$::DYE::GUI::font_size+1}]
-	
+	set page [namespace current]	
+
 	::DYE::GUI::add_page $page -buttons_loc center
 	
 	# Items search entry box
 	set entries_width 75
 	::DYE::GUI::add_text_entry $page "filter_string" 380 150 400 150 $entries_width -label [translate "Filter values"] \
-		-font_size $font_size -label_anchor "ne" -label_justify "right" 
+		-font [DSx_font font 8] -label_font [DSx_font font 8] -label_anchor "ne" -label_justify "right" 
 	bind $widgets(filter_string) <KeyRelease> ::DYE::IS::filter_string_change 
 	
 	# Empty category message
 	::DYE::GUI::add_text $page 1280 750 [translate "This category is currently empty.\r\
 Available values are read from description data\rentered in this and previous shots.\r\r\
 Please fill shots data in the previous page\rfor values to start appearing here."] \
-		-widget_name empty_category_msg -font_size $::DYE::GUI::section_font_size -fill $::DYE::GUI::remark_color \
+		-widget_name empty_category_msg -font [DSx_font font 10] -fill $::DYE::GUI::remark_color \
 		-anchor "center" -justify "center" -state hidden
 
 	# Items listbox
-	::DYE::GUI::add_listbox $page items 380 230 400 230 $entries_width 16 -font_size $font_size \
-		-label [translate "Values"] -label_anchor "ne" -label_justify "right"
+	::DYE::GUI::add_listbox $page items 380 230 400 230 $entries_width 16 -font [DSx_font font 8] \
+		-label [translate "Values"] -label_font [DSx_font font 8] -label_anchor "ne" -label_justify "right"
 	bind $widgets(items) <<ListboxSelect>> ::DYE::IS::items_select
 	
 	# Modify selected item entrybox
 	::DYE::GUI::add_text_entry $page "modified_value" 380 1300 400 1300 $entries_width -label [translate "Modify value"] \
-		-font_size $font_size -label_anchor "ne" -label_justify "right" 
+		-font [DSx_font font 8] -label_font [DSx_font font 8] -label_anchor "ne" -label_justify "right" 
 	bind $widgets(modified_value) <Leave> { hide_android_keyboard
 		set ::DYE::IS::data(modified_value) [string trim $::DYE::IS::data(modified_value)] }
 	
@@ -5524,8 +5256,9 @@ Please fill shots data in the previous page\rfor values to start appearing here.
 	::DYE::GUI::add_button1 $page modify 2250 1260 "Modify" ::DYE::IS::modify_click
 	
 	# Modify result text
-	::DYE::GUI::add_variable $page 2450 1450 {$::DYE::IS::data(modified_result)} -anchor "ne" -justify "right" \
-		-font_size $::DYE::GUI::section_font_size -fill $::DYE::GUI::remark_color  
+	add_de1_variable $page 2450 1450 -font [DSx_font font 10] -fill $::DSx_settings(orange) -anchor "ne" \
+		-justify "right" -textvariable {$::DYE::IS::data(modified_result)} 
+	
 }
 
 proc ::DYE::IS::filter_string_change {} {
@@ -5723,66 +5456,65 @@ proc ::DYE::NUME::setup_ui {} {
 	variable data
 	variable widgets
 	set page [namespace current]	
-	set incs_font_size 6
 	
 	::DYE::GUI::add_page $page -buttons_loc center
 	
 	# Value being edited
 	set x_left_center 550; set y 275
-	::DYE::GUI::add_text_entry $page $data(field_name) -1 -1 $x_left_center $y 5 -font_size 16 \
-		-widget_name value -data_type numeric -textvariable ::DYE::NUME::data(value) 
+	::DYE::GUI::add_text_entry $page $data(field_name) -1 -1 $x_left_center $y 5 -font [DSx_font font 16] \
+		-textvariable ::DYE::NUME::data(value) -widget_name value -data_type numeric -exportselection 1
 	
 	# Erase button
 	::DYE::GUI::add_symbol $page $x_left_center [expr {$y+140}] eraser -size medium -has_button 1 \
 		-button_cmd { set ::DYE::NUME::data(value) "" }
 	
-#	# Increment/Decrement value arrows 
+	# Increment/Decrement value arrows 
 	incr y 45; set y_symbol_offset 5; set y_label_offset 90
 	::DYE::GUI::add_symbol $page [expr {$x_left_center-100}] [expr {$y+$y_symbol_offset}] chevron_left \
 		-size medium -anchor center \
 		-has_button 1 -button_cmd { ::DYE::NUME::incr_value [expr -$::DYE::NUME::data(small_increment)] }
 	::DYE::GUI::add_variable $page [expr {$x_left_center-100}] [expr {$y+$y_label_offset}] \
 		{-[format [::DYE::NUME::value_format] $::DYE::NUME::data(small_increment)]} \
-		-anchor center -font_size $incs_font_size
+		-anchor center -font [DSx_font font 6]
 	
 	::DYE::GUI::add_symbol $page [expr {$x_left_center-260}] [expr {$y+$y_symbol_offset}] chevron_double_left \
 		-size medium -anchor center \
 		-has_button 1 -button_cmd { ::DYE::NUME::incr_value [expr -$::DYE::NUME::data(big_increment)] }
 	::DYE::GUI::add_variable $page [expr {$x_left_center-260}] [expr {$y+$y_label_offset}] \
 		{-[format [::DYE::NUME::value_format] $::DYE::NUME::data(big_increment)]} \
-		-anchor center -font_size $incs_font_size
+		-anchor center -font [DSx_font font 6]
 
 	::DYE::GUI::add_symbol $page [expr {$x_left_center-400}] [expr {$y+$y_symbol_offset}] arrow_to_left \
 		-size medium -anchor center \
 		-has_button 1 -button_cmd { ::DYE::NUME::set_value $::DYE::NUME::data(min_value) }
 	::DYE::GUI::add_variable $page [expr {$x_left_center-400}] [expr {$y+$y_label_offset}] \
 		{[format [::DYE::NUME::value_format] $::DYE::NUME::data(min_value)]} \
-		-anchor center -font_size $incs_font_size
+		-anchor center -font [DSx_font font 6]
 	
 	::DYE::GUI::add_symbol $page [expr {$x_left_center+360}] [expr {$y+$y_symbol_offset}] chevron_right \
 		-size medium -anchor center \
 		-has_button 1 -button_cmd { ::DYE::NUME::incr_value $::DYE::NUME::data(small_increment) }
 	::DYE::GUI::add_variable $page [expr {$x_left_center+360}] [expr {$y+$y_label_offset}] \
 		{+[format [::DYE::NUME::value_format] $::DYE::NUME::data(small_increment)]} \
-		-anchor center -font_size $incs_font_size
+		-anchor center -font [DSx_font font 6]
 	
 	::DYE::GUI::add_symbol $page [expr {$x_left_center+510}] [expr {$y+$y_symbol_offset}] chevron_double_right \
 		-size medium -anchor center \
 		-has_button 1 -button_cmd { ::DYE::NUME::incr_value $::DYE::NUME::data(big_increment) }
 	::DYE::GUI::add_variable $page [expr {$x_left_center+510}] [expr {$y+$y_label_offset}] \
 		{+[format [::DYE::NUME::value_format] $::DYE::NUME::data(big_increment)]} \
-		-anchor center -font_size $incs_font_size
+		-anchor center -font [DSx_font font 6]
 
 	::DYE::GUI::add_symbol $page [expr {$x_left_center+670}] [expr {$y+$y_symbol_offset}] arrow_to_right \
 		-size medium -anchor center \
 		-has_button 1 -button_cmd { ::DYE::NUME::set_value $::DYE::NUME::data(max_value) }
 	::DYE::GUI::add_variable $page [expr {$x_left_center+670}] [expr {$y+$y_label_offset}] \
 		{[format "%.$::DYE::NUME::data(n_decimals)f" $::DYE::NUME::data(max_value)]} \
-		-anchor center -font_size $incs_font_size
+		-anchor center -font [DSx_font font 6]
 
 	# Previous values listbox
 	::DYE::GUI::add_listbox $page previous_values 450 600 450 680 16 9 -label [translate "Previous values"] \
-		-font_size $::DYE::GUI::section_font_size 
+		-font [DSx_font font 10] -label_font [DSx_font font 10] 
 	bind $widgets(previous_values) <<ListboxSelect>> ::DYE::NUME::previous_values_select
 	
 	# Numeric type pad
@@ -5793,62 +5525,62 @@ proc ::DYE::NUME::setup_ui {} {
 	set x [expr {$x_base+0*($width+$space)}]
 	set y [expr {$y_base+0*($height+$space)}]
 	::DYE::GUI::add_button $page num7 $x $y [expr {$x+$width}] [expr {$y+$height}] "7" {::DYE::NUME::enter_character 7} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 	
 	set x [expr {$x_base+1*($width+$space)}]
 	set y [expr {$y_base+0*($height+$space)}]
 	::DYE::GUI::add_button $page num8 $x $y [expr {$x+$width}] [expr {$y+$height}] "8" {::DYE::NUME::enter_character 8} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+2*($width+$space)}]
 	set y [expr {$y_base+0*($height+$space)}]
 	::DYE::GUI::add_button $page num9 $x $y [expr {$x+$width}] [expr {$y+$height}] "9" {::DYE::NUME::enter_character 9} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+0*($width+$space)}]
 	set y [expr {$y_base+1*($height+$space)}]
 	::DYE::GUI::add_button $page num4 $x $y [expr {$x+$width}] [expr {$y+$height}] "4" {::DYE::NUME::enter_character 4} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+1*($width+$space)}]
 	set y [expr {$y_base+1*($height+$space)}]
 	::DYE::GUI::add_button $page num5 $x $y [expr {$x+$width}] [expr {$y+$height}] "5" {::DYE::NUME::enter_character 5} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+2*($width+$space)}]
 	set y [expr {$y_base+1*($height+$space)}]
 	::DYE::GUI::add_button $page num6 $x $y [expr {$x+$width}] [expr {$y+$height}] "6" {::DYE::NUME::enter_character 6} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+0*($width+$space)}]
 	set y [expr {$y_base+2*($height+$space)}]
 	::DYE::GUI::add_button $page num1 $x $y [expr {$x+$width}] [expr {$y+$height}] "1" {::DYE::NUME::enter_character 1} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+1*($width+$space)}]
 	set y [expr {$y_base+2*($height+$space)}]
 	::DYE::GUI::add_button $page num2 $x $y [expr {$x+$width}] [expr {$y+$height}] "2" {::DYE::NUME::enter_character 2} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+2*($width+$space)}]
 	set y [expr {$y_base+2*($height+$space)}]
 	::DYE::GUI::add_button $page num3 $x $y [expr {$x+$width}] [expr {$y+$height}] "3" {::DYE::NUME::enter_character 3} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+0*($width+$space)}]
 	set y [expr {$y_base+3*($height+$space)}]
 	::DYE::GUI::add_button $page num_del $x $y [expr {$x+$width}] [expr {$y+$height}] "Del" {::DYE::NUME::enter_character DEL} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+1*($width+$space)}]
 	set y [expr {$y_base+3*($height+$space)}]
 	::DYE::GUI::add_button $page num0 $x $y [expr {$x+$width}] [expr {$y+$height}] "0" {::DYE::NUME::enter_character 0} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 
 	set x [expr {$x_base+2*($width+$space)}]
 	set y [expr {$y_base+3*($height+$space)}]
 	::DYE::GUI::add_button $page num_dot $x $y [expr {$x+$width}] [expr {$y+$height}] "." {::DYE::NUME::enter_character .} \
-		-label_font_size $numpad_font_size
+		-label_font [DSx_font font $numpad_font_size]
 }
 
 proc ::DYE::NUME::value_format {} {
@@ -6215,11 +5947,12 @@ proc ::DYE::FSH::setup_ui {} {
 	
 	# Categories1 listbox
 	set x_left 60; set y 120
-	::DYE::GUI::add_listbox $page categories1 $x_left $y $x_left [expr {$y+80}] 25 10 \
-		-label_font_size $::DYE::GUI::section_font_size -selectmode multiple
+	::DYE::GUI::add_listbox $page categories1 $x_left $y $x_left [expr {$y+80}] 25 10 -label_font [DSx_font font 10] \
+		-selectmode multiple
 	
-	::DYE::GUI::add_symbol $page [expr {$x_left+300}] [expr {$y+0}] sort_down -size small \
-		-widget_name categories1_label_dropdown
+	set "${page}::widgets(categories1_label_dropdown)" [::add_de1_text $page [expr {$x_left+300}] \
+		[expr {$y+0}] -font fontawesome_reg_small -fill $::DYE::GUI::font_color -anchor "nw" -justify "left" \
+		-text $DYE::GUI::symbol_sort_down ]	
 	set "${page}::widgets(categories1_label_dropdown_button)" [::add_de1_button $page {
 			say "select" $::settings(sound_button_in)
 			::DYE::IS::load_page categories ::DYE::FSH::select_category1_callback $::DYE::FSH::data(categories1_label)
@@ -6232,11 +5965,12 @@ proc ::DYE::FSH::setup_ui {} {
 	
 	# Categories2 listbox
 	set x_left2 700
-	::DYE::GUI::add_listbox $page categories2 700 $y $x_left2 [expr {$y+80}] 25 10 \
-		-label_font_size $::DYE::GUI::section_font_size -selectmode multiple
+	::DYE::GUI::add_listbox $page categories2 700 $y $x_left2 [expr {$y+80}] 25 10 -label_font [DSx_font font 10] \
+		-selectmode multiple
 
-	::DYE::GUI::add_symbol $page [expr {$x_left2+300}] [expr {$y+0}] sort_down -size small \
-		-widget_name categories2_label_dropdown	
+	set "${page}::widgets(categories2_label_dropdown)" [::add_de1_text $page [expr {$x_left2+300}] \
+		[expr {$y+0}] -font fontawesome_reg_small -fill $::DYE::GUI::font_color -anchor "nw" -justify "left" \
+		-text $DYE::GUI::symbol_sort_down ]							
 	set "${page}::widgets(categories2_label_dropdown_button)" [::add_de1_button $page {
 			say "select" $::settings(sound_button_in)
 			::DYE::IS::load_page categories ::DYE::FSH::select_category2_callback $::DYE::FSH::data(categories2_label)
@@ -6280,7 +6014,7 @@ proc ::DYE::FSH::setup_ui {} {
 	::DYE::GUI::add_rating $page espresso_enjoyment 1650 575 1725 575 600 -widget_name "enjoyment_to" -label "to"
 
 	# Order by
-	::DYE::GUI::add_text $page $x_right_label 690 [translate "Order by"] -font [::DYE::GUI::get_font $::DYE::GUI::font 9]
+	::DYE::GUI::add_text $page $x_right_label 690 [translate "Order by"] -font [DSx_font font 9]
 
 	set x $x_right_widget; set y 720
 	::DYE::GUI::add_variable $page $x $y {$::DYE::FSH::data(order_by_date)} -anchor center -justify center \
@@ -6301,8 +6035,8 @@ proc ::DYE::FSH::setup_ui {} {
 
 	# Number of search matches
 	set data(n_matched_shots_text) [translate "No shots"]
-	::DYE::GUI::add_variable $page 2150 900 {$::DYE::FSH::data(n_matched_shots_text)} \
-		-font_size $::DYE::GUI::section_font_size -anchor "ne" -justify "right" -width [rescale_x_skin 800]
+	::DYE::GUI::add_variable $page 2150 900 {$::DYE::FSH::data(n_matched_shots_text)} -font [DSx_font font 10] \
+		-anchor "ne" -justify "right" -width [rescale_x_skin 800]
 	
 	# Search results showing matching shots
 	::DYE::GUI::add_listbox $page shots -1 -1 $x_left 975 115 7 
@@ -6347,8 +6081,11 @@ proc ::DYE::FSH::category1_change { new_category } {
 proc ::DYE::FSH::fill_categories1_listbox {} {
 	variable data
 	variable widgets
-
+#	set db ::DYE::DB::get_db
+#	set profiles [db eval {SELECT profile_title FROM shot WHERE LENGTH(COALESCE(profile_title,''))>0 AND removed=0
+#		GROUP BY profile_title ORDER BY count(*) DESC}]	
 	$widgets(categories1) delete 0 end
+
 	if { $data(category1) ne "" } {
 		set cat_values [::DYE::DB::available_categories $data(category1)]
 		$widgets(categories1) insert 0 {*}$cat_values
@@ -6396,8 +6133,12 @@ proc ::DYE::FSH::category2_change { new_category } {
 proc ::DYE::FSH::fill_categories2_listbox {} {
 	variable widgets
 	variable data
-	
+#	set db ::DYE::DB::get_db
+#	set beans [db eval {
+#		SELECT bean_desc FROM V_shot WHERE LENGTH(bean_desc) > 0 AND removed=0
+#		GROUP BY bean_desc ORDER BY MAX(clock) DESC}]
 	$widgets(categories2) delete 0 end
+
 	if { $data(category2) ne "" } {
 		set cat_values [::DYE::DB::available_categories $data(category2)]
 		$widgets(categories2) insert 0 {*}$cat_values
@@ -6732,10 +6473,10 @@ proc ::DYE::SEQ::setup_ui {} {
 	
 	# Header
 	set y 150
-	::DYE::GUI::add_text $page 540 $y [translate "Available"] -font_size $::DYE::GUI::section_font_size \
-		-widget_name available_header -fill $::DYE::GUI::page_title_color -anchor "center" -justify "center"
-	::DYE::GUI::add_text $page 1840 $y [translate "Used in this shot"] -font_size $::DYE::GUI::section_font_size \
-		-widget_name used_header -fill $::DYE::GUI::page_title_color -anchor "center" -justify "center"
+	::DYE::GUI::add_text $page 540 $y [translate "Available"] -font [DSx_font font 10] -widget_name available_header \
+		-fill $::DYE::GUI::page_title_color -anchor "center" -justify "center"
+	::DYE::GUI::add_text $page 1840 $y [translate "Used in this shot"] -font [DSx_font font 10] -widget_name used_header \
+		-fill $::DYE::GUI::page_title_color -anchor "center" -justify "center"
 
 	# Available equipment types
 	set y 200
@@ -6775,7 +6516,7 @@ proc ::DYE::SEQ::setup_ui {} {
 		-dropdown_cmd ::DYE::SEQ::selected_setting_dropdown_click
 	bind $::DYE::SEQ::widgets(selected_setting) <Leave> ::DYE::SEQ::selected_setting_change
 	
-#	add_de1_text $page $x_right_label $y -font [::DYE::GUI::get_font $::DYE::GUI::font 7] \
+#	add_de1_text $page $x_right_label $y -font [DSx_font font 7] \
 #		-fill $::DSx_settings(font_colour) -anchor "nw" -text [translate "Setting"]
 #	set widgets(selected_setting) [add_de1_widget $page entry $x_right_field $y {
 #			bind $widget <Leave> {
@@ -6798,7 +6539,7 @@ proc ::DYE::SEQ::setup_ui {} {
 #			}
 #			bind $widget <Return> { hide_android_keyboard ; focus [tk_focusNext %W] }
 #		} -textvariable ::DYE::SEQ::data(selected_setting) -relief sunken \
-#		-width $setting_entry_width -font [::DYE::GUI::get_font $::DYE::GUI::font 7] \
+#		-width $setting_entry_width -font [DSx_font font 7] \
 #		-borderwidth 1 -bg $::DSx_settings(bg_colour) -highlightthickness 1 \
 #		-highlightcolor $::DSx_settings(font_colour) -justify left \
 #		-foreground $::DSx_settings(font_colour) -insertbackground $::DSx_settings(orange) ]
@@ -7126,6 +6867,8 @@ proc ::DYE::MODC::load_page { category {selected {} } { allow_add {} } args } {
 	}
 	categories_select
 #	set data(modify_value) $new_value
+		
+	hide_android_keyboard
 }
 
 proc ::DYE::MODC::setup_ui {} {
@@ -7579,7 +7322,8 @@ proc ::DYE::MENU::setup_ui {} {
 	add_de1_image $page 0 0 "[skin_directory_graphics]/background/bg2.jpg"
 
 	::DYE::GUI::add_text $page 650 100 [translate "Menu"] -widget_name page_title \
-		-font_size $::DYE::GUI::header_font_size -fill $::DYE::GUI::page_title_color -anchor "center" 
+		-font [DSx_font font $::DYE::GUI::header_font_size] -fill $::DYE::GUI::page_title_color \
+		-anchor "center" 
 
 	# Close menu
 	::DYE::GUI::add_symbol $page 1200	60 window_close -widget_name close_page -has_button 1 \
@@ -7654,10 +7398,8 @@ proc ::DYE::CFG::setup_ui {} {
 		-cancel_button 0 -done_button 0
 		
 	set y 180
-	::DYE::GUI::add_text $page 600 $y [translate "General options"] -font_size $::DYE::GUI::section_font_size \
-		-anchor "center" -justify "center" 	
-	::DYE::GUI::add_text $page 1900 $y [translate "Database"] -font_size $::DYE::GUI::section_font_size \
-		-anchor "center" -justify "center"	
+	::DYE::GUI::add_text $page 600 $y [translate "General options"] -font [DSx_font font 10] 	-anchor "center" -justify "center" 	
+	::DYE::GUI::add_text $page 1900 $y [translate "Database"] -font [DSx_font font 10] -anchor "center" -justify "center"	
 	
 	# LEFT SIDE
 	set x_label 100; incr y 70
@@ -7780,8 +7522,7 @@ proc ::DYE::CFG::setup_ui {} {
 	
 	# FOOTER (versions)
 	::DYE::GUI::add_text $page 2150 1520 "DYE plugin v$::DYE::plugin_version - DB v$::DYE::db_version" \
-		-justify center -anchor center
-#-font [::DYE::GUI::get_font $::DYE::GUI::font 7] 
+		-font [DSx_font font 7] -justify center -anchor center
 	
 	::add_de1_action $page ::DYE::CFG::show_page
 }
