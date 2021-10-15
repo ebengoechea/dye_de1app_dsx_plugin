@@ -1,6 +1,6 @@
 # "Describe Your Espresso" DE1app DSx plugin
 
-<span style="color:red">**WARNING: DON'T USE WITH CURRENT DE1 APP VERSIONS (OLDER THAN 1.37) This was a DSx-only plugin and has been superseded by the [skin-independent extension](https://github.com/ebengoechea/de1app_plugin_DYE) that is distributed automatically with the base app.**</span>
+<span style="color:red">**WARNING: DON'T USE WITH CURRENT DE1 APP VERSIONS (NEWER THAN 1.37) This was a DSx-only plugin and has been superseded by the [skin-independent extension](https://github.com/ebengoechea/de1app_plugin_DYE) that is distributed automatically with the base app.**</span>
 
 "Describe Your Espresso" (DYE) is a [DSx](https://www.diy.brakel.com.au/dsx/) plugin for the [Decent DE1 app](https://github.com/decentespresso/de1app).
 
