@@ -2,7 +2,7 @@
 
 <span style="color:red">**WARNING: DON'T USE WITH CURRENT DE1 APP VERSIONS (OLDER THAN 1.37) This was a DSx-only plugin and has been superseded by the [skin-independent extension](https://github.com/ebengoechea/de1app_plugin_DYE) that is distributed automatically with the base app.**</span>
 
-"Describe Your Espresso" (DYE) is a [DSx](https://www.diy.brakel.com.au/dsx/](https://www.diy.brakel.com.au/dsx/) plugin for the [Decent DE1 app](https://github.com/decentespresso/de1app](https://github.com/decentespresso/de1app).
+"Describe Your Espresso" (DYE) is a [DSx](https://www.diy.brakel.com.au/dsx/) plugin for the [Decent DE1 app](https://github.com/decentespresso/de1app).
 
 It improves the default shot logging functionality in the Insight and DSx skins, allowing users to edit, modify and use shot metadata such as beans, grinder, EY & TDS or espresso description.
 
